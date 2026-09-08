@@ -1191,10 +1191,10 @@
                         <button class="seg-btn" data-v="value" onclick="setSeg('pref',this)">性价比优先</button>
                         <button class="seg-btn on" data-v="time" onclick="setSeg('pref',this)">时间优先</button>
                     </div>
-                    <input class="plan-input" id="planFromCity" placeholder="出发城市（默认郑州，支持任意城市）" value="郑州">
+                    <input class="plan-input" id="planFromCity" placeholder="出发城市（默认郑州，支持全国省会/直辖市）" value="郑州">
                     <!-- 火车车次选择（需求：每个出发城市都显示详细车次供选择） -->
                     <div class="seg-row" id="trainPickRow" style="flex-direction:column;align-items:stretch;gap:6px">
-                        <div class="seg-label">🚆 选择你的车次 <span style="font-weight:400;color:var(--txt-mid)">（按出发城市显示真实车次，价格以 12306 为准）</span></div>
+                        <div class="seg-label">🚆 选择你的车次 <span style="font-weight:400;color:var(--txt-mid)">（全国省会城市车次/换乘方案，价格以 12306 为准）</span></div>
                         <div class="pick-options" id="trainPickOptions"></div>
                     </div>
                     <input class="plan-input" id="planBudget" placeholder="预算（可选，如：3000元 或 交通2000内）">
