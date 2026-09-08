@@ -1,0 +1,10 @@
+# 视频素材与本地备份（不部署到 Pages，体积大）
+videos/
+plan-tool/
+
+# 系统与编辑器文件
+.DS_Store
+Thumbs.db
+
+# 本地研究文档（md 中间稿不部署，html 版保留）
+研究报告-五大新需求.md
