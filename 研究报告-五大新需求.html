@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="sO52L4LPiRA4dEqFjWxJ8B">
+<head data-page-node-id="X4o36RXKWWO3KjyJvo2rc1">
+<meta charset="UTF-8" data-page-node-id="nOqNALG1i61C8DCVNZqpPX">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="cj9cduKVFJHs9PVRDDyIyA">
+<title>亚丁大转山平台 · 五大新需求研究报告</title>
+<style>
+  :root {
+    --bg0:#0b0f1a; --bg1:#111827; --bg2:#1a2336;
+    --card:rgba(255,255,255,.055); --card-bd:rgba(255,255,255,.09);
+    --txt:#e7ecf5; --txt-mid:#9aa7bd; --txt-dim:#66728a;
+    --acc:#5aa7ff; --acc2:#8b7bff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+    --radius:16px;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:linear-gradient(160deg,#0b0f1a,#101b30 55%,#0d1220);
+    color:var(--txt); line-height:1.75; padding:40px 16px 80px;
+  }
+  .wrap { max-width:880px; margin:0 auto; }
+  header { text-align:center; padding:28px 0 34px; }
+  .kicker { color:var(--acc); font-size:13px; letter-spacing:.16em; margin-bottom:10px; }
+  h1 { font-size:30px; font-weight:800; letter-spacing:.02em; }
+  .sub { color:var(--txt-mid); font-size:14px; margin-top:12px; }
+  .pill { display:inline-block; background:var(--card); border:1px solid var(--card-bd);
+    color:var(--txt-mid); border-radius:999px; padding:4px 12px; font-size:12px; margin:4px 3px; }
+  section { background:var(--card); border:1px solid var(--card-bd); border-radius:var(--radius);
+    padding:26px 28px; margin:20px 0; backdrop-filter:blur(12px); }
+  h2 { font-size:20px; font-weight:700; margin-bottom:6px; display:flex; align-items:center; gap:10px; }
+  .sec-num { background:linear-gradient(135deg,var(--acc),var(--acc2)); color:#fff; font-size:13px;
+    border-radius:9px; width:30px; height:30px; display:flex; align-items:center; justify-content:center; flex:none; }
+  .lead { color:var(--txt-mid); font-size:14px; margin:4px 0 16px; }
+  h3 { font-size:16px; font-weight:700; margin:20px 0 10px; color:var(--txt); }
+  p { margin:8px 0; font-size:14.5px; }
+  strong { color:#fff; }
+  em { color:var(--acc); font-style:normal; }
+  ul,ol { margin:8px 0 8px 22px; font-size:14.5px; }
+  li { margin:5px 0; }
+  table { width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px; }
+  th,td { border:1px solid var(--card-bd); padding:9px 11px; text-align:left; vertical-align:top; }
+  th { background:rgba(90,167,255,.09); color:var(--txt); font-weight:700; white-space:nowrap; }
+  tr:nth-child(even) td { background:rgba(255,255,255,.025); }
+  .verdict { border-left:4px solid var(--ok); background:rgba(74,222,128,.08);
+    padding:12px 16px; border-radius:0 10px 10px 0; margin:14px 0; font-size:14.5px; }
+  .verdict.warn { border-left-color:var(--warn); background:rgba(251,191,36,.08); }
+  .verdict.bad { border-left-color:var(--bad); background:rgba(248,113,113,.08); }
+  .tag { display:inline-block; font-size:11px; border-radius:6px; padding:2px 8px; margin-right:6px; font-weight:700; }
+  .tag.free { background:rgba(74,222,128,.15); color:var(--ok); }
+  .tag.crawl { background:rgba(251,191,36,.15); color:var(--warn); }
+  .tag.paid { background:rgba(248,113,113,.15); color:var(--bad); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .card { background:rgba(255,255,255,.035); border:1px solid var(--card-bd); border-radius:12px; padding:14px 16px; }
+  .card b { display:block; margin-bottom:4px; color:var(--txt); }
+  .card span { font-size:13px; color:var(--txt-mid); }
+  code { background:rgba(255,255,255,.07); border:1px solid var(--card-bd); border-radius:5px;
+    padding:1px 6px; font-size:12.5px; font-family:ui-monospace,Menlo,monospace; color:var(--acc); word-break:break-all; }
+  footer { text-align:center; color:var(--txt-dim); font-size:12px; margin-top:34px; }
+  @media (max-width:640px){ .grid2{grid-template-columns:1fr;} h1{font-size:24px;} section{padding:20px 18px;} }
+</style>
+</head>
+<body data-page-node-id="440Ba8iCZcQDuJc9wRhNuL">
+<div class="wrap" data-page-node-id="kvgb62YNZuJQF0mrTahzZ0">
+  <header data-page-node-id="ZoHRlDFGOIDGA4ufp4jIs6">
+    <div class="kicker" data-page-node-id="isQfAQhEZEG11uWUHJcpgE">RESEARCH REPORT · 2026-09-06</div>
+    <h1 data-page-node-id="nbXGjQCv7IOFSBekj4wDcL">亚丁大转山徒步平台 · 五大新需求研究报告</h1>
+    <p class="sub" data-page-node-id="Tewk8bX9iBLcLf8kQNAYl1">首页账号 ｜ 全国铁路同步 ｜ 每日7点定时更新 ｜ 个性化建议 ｜ 是否需 API</p>
+    <div data-page-node-id="QxK3fXgDAdec7VqLV7l7x6">
+      <span class="pill" data-page-node-id="0OnwNEPQJrmBlFPRvDjBvb">面向 hiking-platform 主平台</span>
+      <span class="pill" data-page-node-id="tuB7ZQ7dz1ZDWO70L3ETud">研究搜集阶段交付</span>
+      <span class="pill" data-page-node-id="PTppG0xLPYXG2AnCaTJmHZ">未改动任何页面代码</span>
+    </div>
+  </header>
+
+  <section data-page-node-id="RU3b1BNBOqxIxeZI4OnUP1">
+    <h2 data-page-node-id="4fIgBrA7j5LCsqVfYR09HE"><span class="sec-num" data-page-node-id="gXOo7FULiEJFJ9AbRUTR8D">0</span>结论先行</h2>
+    <div class="verdict" data-page-node-id="4y6JCaIE1CWkuuuQ8W5eaC">✅ <strong data-page-node-id="yKEGPYBnzCgSafDdvp4odM">铁路不需要付费 API</strong>——12306 官方公开接口免费可用（需带 cookie 模拟浏览器）；<strong data-page-node-id="AFo6SvE3zmuqP4RFEJR2qk">天气不需要 key</strong>（Open-Meteo 免费，平台已接入）；<strong data-page-node-id="a4t44AVy3NDHltivhMR8oV">首页图标免费热链</strong>。唯一需要爬虫的是抖音/小红书内容（无官方 API）。<br data-page-node-id="yKXAEpButI4zsOk5C0kL4Y"><br data-page-node-id="FUf1V11bDtGM6ZAALyyBbE">一句话：<strong data-page-node-id="8RtmJDA4g99dftucTZMiMq">除内容爬取外，其余全部免费 API 或纯前端实现，外部费用 ≈ 0 元。</strong></div>
+  </section>
+
+  <section data-page-node-id="BuiHnLvt4FKhg3c1Q22ZVk">
+    <h2 data-page-node-id="obLU31didiq4jJZdCFZyLH"><span class="sec-num" data-page-node-id="ZE2lDDeJQF71EgDXm4ZyJw">1</span>需求一 · 首页展示抖音/小红书账号（@少于无）</h2>
+    <p class="lead" data-page-node-id="oCnpbMrIsFMoGCpjYeiMpV">首页放两个社交图标 + <code data-page-node-id="Ig0fncH1uz6l1WqIKI8i3t">@少于无</code>，点击跳主页。纯静态展示，<em data-page-node-id="ICWtfIgT21lMDNygJzteA4">不需要任何 API</em>。</p>
+    <h3 data-page-node-id="xNQ21377n63jWFSL7v3p9Z">图标资源（已实测可用）</h3>
+    <table data-page-node-id="Hige1mCV7UFTCeIpk1LEbv">
+      <tr data-page-node-id="YbTHHJ6YbfDUtrlu59NA7K"><th data-page-node-id="rEmXayjkPw8DCnWACxb9GK">平台</th><th data-page-node-id="8pYNezbhyBUlnNFIqRlBEL">图标源</th><th data-page-node-id="DSOcS270FOGMer2R5KZ2DZ">实测</th></tr>
+      <tr data-page-node-id="SaU30nuH7AQelfYwItoZh4"><td data-page-node-id="wWBdTvHYJjKm4KzHnJ2MJ0">小红书</td><td data-page-node-id="R5YUqxO0KEsInTimeKAH4d"><code data-page-node-id="iFMMG9DEvnzCDI5S6IHle1">https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/xiaohongshu.svg</code></td><td data-page-node-id="N80UIWnnPhO93N35km632K">✅ 200</td></tr>
+      <tr data-page-node-id="l01JGh8hBGPZKI4GKimng6"><td data-page-node-id="P1roKrjRKpVrxRbMJ6ow2f">抖音</td><td data-page-node-id="rPBcIwwGu6uGbT28tAsUMU"><code data-page-node-id="GOYkCdbc4CqTf6XcDkfVUs">https://api.iconify.design/simple-icons/tiktok.svg</code>（同源音符图标）</td><td data-page-node-id="HdbTowpaFRfu2PnobR8Byu">✅ 200</td></tr>
+    </table>
+    <h3 data-page-node-id="4QsFLPe1ITIzXQ9TYjcY3K">落地</h3>
+    <ul data-page-node-id="tmyStCVIMYdTJNj56A3cei">
+      <li data-page-node-id="aIL1oFchXwrPWkajXx72Jn">首页头部加社交图标 + 文字，<code data-page-node-id="d8vqDtfur6cR7QkjAlW2HL">&lt;img&gt;</code> 直接热链 SVG，零依赖。</li>
+      <li data-page-node-id="Ln7XfYaZhMgAYVVQ65BC9d">图标加 <code data-page-node-id="CVxDLejyflixHQ3D9JkuGd">referrerpolicy="no-referrer"</code> + <code data-page-node-id="c89WYLDaDGm4GQ40zn16jw">onerror</code> 兜底，防部分 CDN 防盗链。</li>
+      <li data-page-node-id="yRtu8JsMxnB5rUeYdFhd7O">链接指向账号主页 URL（需用户提供主页地址）。</li>
+    </ul>
+  </section>
+
+  <section data-page-node-id="nH2mozmoNe0qd4ZZDBTOcE">
+    <h2 data-page-node-id="exIstpHxfYHA5TgLP4fdeW"><span class="sec-num" data-page-node-id="PAQvIEfjRlwSJec54oFfsU">2</span>需求二 · 全国铁路信息同步 —— 需要 API 吗？</h2>
+    <div class="verdict" data-page-node-id="TV9p0GlQ86K0vz0xIl8eF3">🔑 <strong data-page-node-id="TJav2YUQDlphpHsrvremjM">答案：不需要付费 API。</strong>12306 官方公开接口免费，App/网页同源，返回 JSON。</div>
+    <table data-page-node-id="RNtOwEB2QEj2uUXHEYBaHP">
+      <tr data-page-node-id="QhbYm8IuLESBGBppHmdErF"><th data-page-node-id="3wJzwurZAKgs1Qgd6qQGo3">数据</th><th data-page-node-id="wUEfXDJiXmshuaQgmD48Wo">接口</th><th data-page-node-id="juMcgdEHfigEnvuhhSgn0f">Key</th></tr>
+      <tr data-page-node-id="yKtrCuDLYMDfEHUa9Cemwz"><td data-page-node-id="IXjDjiqfhVcslFLg9oePBn">余票/车次/时刻</td><td data-page-node-id="9RMYr2xMBmvNVOF9oQCaQk"><code data-page-node-id="kgsMHL8ARZE9lFiotFMxyg">kyfw.12306.cn/otn/leftTicket/query</code></td><td data-page-node-id="WEg1RA4kzHKlvTUbl44MnW">无</td></tr>
+      <tr data-page-node-id="EnWZpRDaeebdjpYUbvgaQr"><td data-page-node-id="6KIl77g13j9wZVgLSqq8io">车站代码表</td><td data-page-node-id="pVPBT6Y1nebMj625oOivft"><code data-page-node-id="Hiy8T54CIxY7Em30ycxwmy">otn/resources/js/framework/station_name.js</code>（可下载本地化，约800KB）</td><td data-page-node-id="UXEyV3tY4aNDkAvJeZEds9">无</td></tr>
+      <tr data-page-node-id="vWBTfIcCBQGGCnWAH5J2fU"><td data-page-node-id="igLHM4IRSxFvJWr5SS4aXZ">车次时刻表</td><td data-page-node-id="W0EbNIiGmLpQSLMxK0W60J"><code data-page-node-id="RNNYM2FkyVyuQHhEl6zh7C">otn/czxx/queryByTrainNo</code></td><td data-page-node-id="PZawEEBbS90Fj985HmDq4N">无</td></tr>
+    </table>
+    <h3 data-page-node-id="hYiMBpgmP8SCPi52UkiLQw">实测情况</h3>
+    <p data-page-node-id="RW8tKZUl17ndexEGKFfe33">接口<strong data-page-node-id="v5vRKp9uHFLYBrmM3dyfI8">能连</strong>但默认 302 → 需先访问 <code data-page-node-id="xfgtnODSW5Vn3ii2XeGbAO">otn/leftTicket/init</code> 取 cookie（<code data-page-node-id="cSLqltpBdmndwJZDHQVPff">curl -c/-b</code>），带 cookie + Referer + UA 后正常查询。技术上完全可行。</p>
+    <h3 data-page-node-id="6Kcza5Qu3T0I4xNVaBTqNG">架构建议</h3>
+    <div class="grid2" data-page-node-id="i9cjxKOabEyClbyb3Zzzkv">
+      <div class="card" data-page-node-id="OWnpRFuzqXjQ0H42rpkJfY"><b data-page-node-id="Gznrsz2SmMPdHKttXn8Iv4">纯前端方案（起步）</b><span data-page-node-id="EAjp6Gp2g1FZ6M6E50Ekrl">车站表本地化 → 前端匹配三字码 → 直接 fetch 12306。零服务器成本；但官方接口未开 CORS，浏览器直连受限。</span></div>
+      <div class="card" data-page-node-id="K3YfykkcQlQf00zqgkQAGv"><b data-page-node-id="jQKdrfs6CXUtKGA9yBBGxr">轻后端方案（正式推荐）</b><span data-page-node-id="lHZCSYm7jCouivceuJHA6D">平台已有的薄代理层转发 12306 请求（带 cookie/Referer/UA），前端只展示。成本≈0。</span></div>
+      <div class="card" data-page-node-id="ZhotaJbMQgnJRL1IwMLStB"><b data-page-node-id="D3Z5nLzDfLZdUTi7EaFsZ3">第三方替代（可选）</b><span data-page-node-id="tnklnmS5KiZNBkPeu2E6NW">聚合数据 juhe（免费300次/日）、阿里云市场。仅当 12306 反爬升级不稳定再考虑。</span></div>
+      <div class="card" data-page-node-id="12jPbB4jpR0F90HPBMDko2"><b data-page-node-id="xRfkGCtmFV5FHTu2VUHnua">体验增强</b><span data-page-node-id="jkfs8tzYpVf9drVlQ4NkeR">表单加"到达城市"、车次卡片（时间/历时/余票）、车次+接驳完整方案落结果页。</span></div>
+    </div>
+    <h3 data-page-node-id="fSpk74uK89xMWBEAgT09bq">风险</h3>
+    <ul data-page-node-id="rAu9IAzbZPGEaccN5eiNzB">
+      <li data-page-node-id="USo4w3HDct1omiqBrLfI2Q">12306 无 SLA、节假日限流 → 失败降级为"请到 12306 官方核实"+ 保留现有通用建议。</li>
+      <li data-page-node-id="ZLClVtbzCDV1KZk0n2sSw0">站名歧义（"北京"多站）→ 用车站下拉而非自由输入。</li>
+      <li data-page-node-id="TfKexfnnX68f7muHrF41Ct">合规：只展示余票/时刻公共信息，不做抢票/代购，安全。</li>
+    </ul>
+  </section>
+
+  <section data-page-node-id="RAQGbVqa7oNYU5ZA0CUaED">
+    <h2 data-page-node-id="C8wqfqR4KNRDGKjk4UcGf7"><span class="sec-num" data-page-node-id="sKTdk2Q9Kq8JBAi3Tr7cJ1">3</span>需求三 · 每日 7 点定时更新</h2>
+    <p class="lead" data-page-node-id="On3d1kaQ0uB2jfdN4tRaRn">两类数据分开处理：</p>
+    <div class="grid2" data-page-node-id="FXk7EEpxiu2NX77tcTzILm">
+      <div class="card" data-page-node-id="FIaixck74rpQoZUjmbMgxH">
+        <b data-page-node-id="9pDmfbFtcKiU4zYk0WqRPy">🌤️ 天气（纯 API）<span class="tag free" data-page-node-id="OsY0yWkD3AD4lbVXsLJmZo">免费</span></b>
+        <span data-page-node-id="c8mVL7qwcg44Z8c1CA8NgG">平台已接 Open-Meteo（实时 current + 16 天 daily + 去年 archive），<code data-page-node-id="jEkg7DLucbBF8rOYMVCyAk">refreshWeather()</code> 已就位。每日 07:00 定时触发即可，<strong data-page-node-id="jRpIKNBO0bpSp53EtrdZOi">无需爬虫</strong>。</span>
+      </div>
+      <div class="card" data-page-node-id="6yZzVybAt7w1Dfx2p4EU3v">
+        <b data-page-node-id="3lvzEHlNS9upsyAyQ58f2I">📰 攻略/视频/文章<span class="tag crawl" data-page-node-id="d6JzUCwbFNldgeodm9Y4kC">需爬虫</span></b>
+        <span data-page-node-id="Fk5lhI0zt39w2ICw3HjLRF">抖音/小红书<strong data-page-node-id="VQYvWmONDEZ95m7Yw62MLR">无官方内容 API</strong>，只能爬。推荐 <strong data-page-node-id="4cPRgeyeRBTEZJ6hAPRjL7">MediaCrawler</strong>（GitHub，Playwright 模拟浏览器、免逆向）。调度 APScheduler / crontab <code data-page-node-id="ORtvSBg5zvyLgXnJpAIp3I">0 7 * * *</code>。</span>
+      </div>
+    </div>
+    <h3 data-page-node-id="yPsP2vH3q3ZOh0ciejGhWE">合规与风险（重要）</h3>
+    <div class="verdict warn" data-page-node-id="hBhgrm4m2JpZ2bR15QHlSj">⚠️ 抖音/小红书条款<strong data-page-node-id="JO2E4JzUC7xQwnXB6DH2TB">禁止未授权抓取</strong>。个人小规模低频（≤1次/日、单账号）风险可控，但建议：控制频率、勿批量下载、勿商业分发、遵守 robots.txt、防封 Cookie。更稳妥替代：<strong data-page-node-id="pklYpiOUl1DgNzNEPFPhlG">投稿/白名单人工维护</strong>精选链接（零风险），爬虫作增强。</div>
+  </section>
+
+  <section data-page-node-id="VIaFsfeSz1xO5BFew6NSq8">
+    <h2 data-page-node-id="OKeTr5MivEDR7D9V3z4AL2"><span class="sec-num" data-page-node-id="UJ6NDir4DDQ87J0aD3oXG1">4</span>需求四 · 个性化建议（让每个选项"有意义"）</h2>
+    <p class="lead" data-page-node-id="Dy8pwgmmqTEIPuBZvDprfz">本轮代码核查发现：表单已有<strong data-page-node-id="LsPgc4os5jolonoYTd9yKG">经验/负重/人数/预算/出发城市</strong>字段，规则引擎已做初步差异化，但——</p>
+    <div class="verdict warn" data-page-node-id="PpBkrhwyPY4KD6QMjCnu5M">⚠️ <strong data-page-node-id="itLVDcfgGe8PqnSaV0hX7D">预算字段完全没用</strong>（收集后未消费）；出发城市交通只分"郑州/其他"两档；无到达/离开交通方式、无"时间优先 vs 性价比优先"、无随日期/朝向动态的机位建议。</div>
+
+    <h3 data-page-node-id="iKL1fXARPizPQJhFNOxfFK">① 经验（新手/中等/老手）→ 差异化到日程与风险</h3>
+    <table data-page-node-id="RCtVwJzytwX1CDXZStug5H">
+      <tr data-page-node-id="mI5D0r3bvYkAAL1ENfpAw9"><th data-page-node-id="ti7Yhcx5NALTPwzYWowF63">维度</th><th data-page-node-id="XRHCYeyyWoo52H0gJUX0UK">新手</th><th data-page-node-id="WzlBrFubDbu0Ehl2XQYkAU">中等</th><th data-page-node-id="KQ991D4poArYEOxEsOGtKS">老手</th></tr>
+      <tr data-page-node-id="dx1ppDVJPiFqRIkPq1ap6y"><td data-page-node-id="cXwOUJ3xAppsXtKoeGQGEg">天数推荐</td><td data-page-node-id="qIGD0a44OtrEfGlhfPzDTw">强制 8 天完整版 + 首日适应</td><td data-page-node-id="XH3nwOfrZiISL9nvDfz6NW">7 天标准</td><td data-page-node-id="CIcGQb8cpDVEXjDD2LLl3S">可 5 天压缩</td></tr>
+      <tr data-page-node-id="lUWHGrmFOsGCFql6kJNfGY"><td data-page-node-id="LNjqEtpYAGAVbEp0XQLrbF">每日里程</td><td data-page-node-id="ZJhNbU42CD2K4noW0LD1zP">按下限（重装 60-70% 强度）</td><td data-page-node-id="0VeC41oR0959rZtkqDFD7B">标准</td><td data-page-node-id="ZPiCvgHHadsqubc1wg10v1">可冲上限</td></tr>
+      <tr data-page-node-id="CRy5eDlUM0Bn3ipHRmas8U"><td data-page-node-id="7AMBTt3Oj4HwixmnPchEZJ">垭口/营地</td><td data-page-node-id="1Wl1r6D1cw5GQFOAbXuJtL">避开高反高发段，建议马帮/向导</td><td data-page-node-id="csciFsqBB3RwtgHIoSx0X1">标准</td><td data-page-node-id="CLE55tBtXdpejhDFOG8IR8">自行决策</td></tr>
+      <tr data-page-node-id="6prTnx9D7gQkkEJbyBvOiA"><td data-page-node-id="G0x234fhYVtZQIjsvBT1wq">装备提示</td><td data-page-node-id="7KAFBkklgfvfDbRoXIoNv4">强制清单+高原药/氧气</td><td data-page-node-id="TOdbB5Ze1Vd4aYdIbO5jrF">标准</td><td data-page-node-id="yugXaZXmDbozzOzDMMrHFN">精简</td></tr>
+      <tr data-page-node-id="Y9Si5hSZib99SBRcsEEvIO"><td data-page-node-id="7LEMYV2leXquS6TXedWNbp">风险弹窗</td><td data-page-node-id="4nW6pDYV7QRHsDFJJPIC5E">🔴 高</td><td data-page-node-id="nLAhOhmQZQl4NmBvzBZcX1">🟡 中</td><td data-page-node-id="WSSOlgwQA6fFK2Gdxwo8sH">🟢 低</td></tr>
+    </table>
+
+    <h3 data-page-node-id="2qUqTTyLd9lrUBDogFHGDr">② 预算 → 整体花费评估 + 推荐酒店/交通</h3>
+    <ul data-page-node-id="S9cZ2NEmG0oAaDpTz7MUT0">
+      <li data-page-node-id="y1oTekCkgJtXsPhp7Wpv6b">建立<strong data-page-node-id="yJyFeGqmh4t1Kdq0mY2vZM">价格库</strong>（本地 JSON，随爬取更新）：火车价（12306 实时）+ 成都→香格里拉专线拼车（约 ¥200-300）+ 返回交通；香格里拉镇/仁村民宿 vs 亚丁村酒店（国庆价已搜集）；门票/观光车/电瓶车、向导费、马帮（150-400 元/包）、气罐、餐饮。</li>
+      <li data-page-node-id="CnOA4NeGkNKWDliZJ23Lcy">逻辑：<code data-page-node-id="FWg3xjp02Q1PsHIF7DUkvw">预算 − 交通 − 门票 − 住宿 = 结余</code> → 判断可行；不够则建议<em data-page-node-id="Zj42Ao1cfVDPvADLtCULsP">改轻装/缩短天数/拼车/淡季</em>。</li>
+      <li data-page-node-id="qwF3l3mo1Y1BTDGhY2LKU5">酒店按预算分档：经济 &lt;¥150 / 舒适 ¥150-350 / 品质 ¥350+，结合位置推荐。</li>
+    </ul>
+
+    <h3 data-page-node-id="WIVkA8BTqAA9EJRPDsPRt1">③ 新增选项：到达/离开交通方式 + 时间优先 vs 性价比优先</h3>
+    <ul data-page-node-id="9WvdKC6FmjjQGRVanRUjIB">
+      <li data-page-node-id="jzzWmB99zCaHJH1dRbwirC">到达：飞机（稻城亚丁机场 YDC，海拔4411m 世界最高，提示高反）/ 火车到成都转专线 / 自驾；离开反向。</li>
+      <li data-page-node-id="TuujT9Qm6WSlkhGaZYdbIz"><strong data-page-node-id="vD2SfOLhUuMxH7fsaTL2b3">时间优先</strong> → 最短总耗时（飞机/直达车）；<strong data-page-node-id="QgEmQJDoeUBP9LWLhA39Gm">性价比优先</strong> → 最省方案（普快+拼车），显示节省金额与耗时差。</li>
+    </ul>
+
+    <h3 data-page-node-id="vqBdk1pK5QAqxTTlf13gzV">④ 拍摄机位（"在哪个位置适合拍哪边的山"）—— 已搜集到位</h3>
+    <table data-page-node-id="diZ1rLXRCBUiTYn88sEqWr">
+      <tr data-page-node-id="AQkN3qQuUs2QYCCxlzwDeq"><th data-page-node-id="ghlv6pHLAxzGCz1FNptbfD">神山</th><th data-page-node-id="MlaAT6HRGAODroZAipb2Vg">最佳机位</th><th data-page-node-id="XoHUrYjvaCwxLsUFv4jNM4">拍摄要点</th></tr>
+      <tr data-page-node-id="QOczONpAsHWysrPtlKgudc"><td data-page-node-id="iX1qsEppjrRDUNBtLpPCaz">仙乃日 6032m</td><td data-page-node-id="yxMqeplHAX8pkZifpHV2d2">珍珠海（倒影）、冲古草甸</td><td data-page-node-id="ihmaJPgVOru5N27Bf5n36q">清晨顺光，湖面倒影</td></tr>
+      <tr data-page-node-id="YEB8GSjVs1z1ooyk01NVZM"><td data-page-node-id="iYUqrcKYP7wjOzAWIaG2ta">央迈勇 5958m</td><td data-page-node-id="tRnjc49o2lzKRekGrmMQlA">洛绒牛场、<strong data-page-node-id="mGEVdmj4heDYUSMJ81615G">蛇湖（西侧最佳）</strong>、波拥措（三山同框+倒影）</td><td data-page-node-id="i9fMvLHRbS9i0w58J2lJxe">波拥措为三神山同框唯一机位</td></tr>
+      <tr data-page-node-id="WUshki7yMBAvST2OnFSF28"><td data-page-node-id="MgcBKzz38VD6W2PrGXFBbc">夏诺多吉 5958m</td><td data-page-node-id="TKoXoqCFPKgqkECsCpeV22">牛奶海、<strong data-page-node-id="M0gm9qE1gz3eDeB5OiLtGy">扎格措（唯一倒影点）</strong></td><td data-page-node-id="ZJHaj8zvRNEPjbFD32KqiS">下午侧光</td></tr>
+    </table>
+    <p data-page-node-id="dDNAb2UxvLenFcSMswtJ53">实现：机位表（坐标/朝向/最佳时段）× 每日行程位置 × 当日日出/天气（Open-Meteo 小时级）→ 动态生成"第 X 天你在此营地，清晨到 XX 拍 XX 山日照金山"。</p>
+  </section>
+
+  <section data-page-node-id="w4JLXUTRQ8YNds11bIltBV">
+    <h2 data-page-node-id="UbnfvY3Lo3LgaEslHecmz1"><span class="sec-num" data-page-node-id="83MxNngm2fs7jSTWDA57F8">5</span>汇总 · 哪些要 API / 要钱 / 要爬虫</h2>
+    <table data-page-node-id="DFeHWOYoiy3YYkvRE7M2r9">
+      <tr data-page-node-id="53fZITFPD7oNlh1fp22s8D"><th data-page-node-id="ZiGth3V4L9OsNgVtUN1NFz">需求</th><th data-page-node-id="QhuqUOHw1wDC5TZgCWK7Ro">是否需 API</th><th data-page-node-id="UEfZ8lpVgSzOvYxbq9RjML">成本</th><th data-page-node-id="QWEo0gIGYzXDO3iFGYRp5J">主要资源</th></tr>
+      <tr data-page-node-id="Fj66RfRPNGCuqpNop0IjeU"><td data-page-node-id="IYIyKP3a7V1dECsP9XuKHZ">首页账号图标</td><td data-page-node-id="tCJviCmkOPHNJ0dc7DfqqF">否</td><td data-page-node-id="5AgSrDWlC0vbkD5S9NORmM">0</td><td data-page-node-id="jfxz6yyQE7G7UE9k3HnHef">Simple Icons / iconify SVG 热链</td></tr>
+      <tr data-page-node-id="Gn2AAyj4f4OnKISOxPNV8R"><td data-page-node-id="4wrEgp7Hu2IKgvRHWstJPT">全国铁路同步</td><td data-page-node-id="znctD8lXPXAjbTTR0RzdFQ"><span class="tag free" data-page-node-id="Iw49RAJjCrVd3YaXvTNqyK">否·免费</span></td><td data-page-node-id="Eg0nKfBOoCJdWmrcmWjyRh">0</td><td data-page-node-id="ypxKrgy7mJ0xWTkID0len2">12306 leftTicket/query + station_name.js</td></tr>
+      <tr data-page-node-id="jriqkLHJHcJmOFeyl7WhfO"><td data-page-node-id="rQAvK5p6WoZt8Axl0yT48n">每日7点·天气</td><td data-page-node-id="eGHlHejxwefgkNOFCt3Esq">否（免费API）</td><td data-page-node-id="efWaJAl6m5qAKppvuLKSdi">0</td><td data-page-node-id="iiEL8TOYcGv7AOA64hCIog">Open-Meteo（已接入）</td></tr>
+      <tr data-page-node-id="Bzu4oMSMC8fIeWg9tUmbHK"><td data-page-node-id="8FPcFdFBKdWTP0jvuEgxZE">每日7点·内容</td><td data-page-node-id="fI6DuWAkJlfQ6UWPK77wjk"><span class="tag crawl" data-page-node-id="dui1VSVVSKKEB0mhuhCSfO">需爬虫</span></td><td data-page-node-id="kfn9HaRv8bJcXCnF4iIfBF">0（开源）</td><td data-page-node-id="oYwtwx44NdeoCveTrOCtHy">MediaCrawler + APScheduler</td></tr>
+      <tr data-page-node-id="IyPKFOgDDOWDwdB7VvowqV"><td data-page-node-id="zjAs66fLKOJJBl07nuLhhX">个性化·机位/预算/交通</td><td data-page-node-id="mAqcTTiCPKVBRATRHHKO14">否（本地规则+价格库）</td><td data-page-node-id="Iv1HEAJFXUk9mgWBd4fncM">0</td><td data-page-node-id="XcFx3La4jDAlcEsBTIklra">前端引擎扩展</td></tr>
+      <tr data-page-node-id="UvGfwOydAAH3MtGqQjY1gd"><td data-page-node-id="VtrHBLLL7pAWFQcPfdFKeq">可选·机票比价</td><td data-page-node-id="vVA65s6k9FW37FqeP9cqG1">可接携程/去哪儿</td><td data-page-node-id="GcTXcWuHVMCwdopDpZsgni">或需申请</td><td data-page-node-id="M1UEpAd80FRyHErGAGgIFc">非必需</td></tr>
+    </table>
+  </section>
+
+  <section data-page-node-id="MmXilB2IvZ6pgwtEHZsEuS">
+    <h2 data-page-node-id="FPLNsBN5v5xfHtktmA0flA"><span class="sec-num" data-page-node-id="DSVvD2WItQ1mjEexcVwuD6">6</span>建议落地顺序</h2>
+    <ol data-page-node-id="KfdET2v2I80XpSL6vKKTux">
+      <li data-page-node-id="FR9co4zeBHI86O2ogDVB2Z"><strong data-page-node-id="ZRku7MV0H4FsgJ5fDQvHxi">Phase 1（纯前端最快见效）</strong>：首页账号图标 ＋ 机位/预算/交通方式/时间性价比个性化 ＋ 车站本地化选车次。</li>
+      <li data-page-node-id="K0OzqyJtl9zbDcIU2cJggF"><strong data-page-node-id="6OxICcRfJovUUWyah2r1IZ">Phase 2（轻后端）</strong>：12306 代理层（解决 CORS，真正打通全国车次实时查询）。</li>
+      <li data-page-node-id="CvAldf9xYTLcHVzGtELvBV"><strong data-page-node-id="15Js7t2FQDgMFvmfyXAx86">Phase 3（定时爬取）</strong>：MediaCrawler + 每日 07:00 调度，喂给价格库与攻略库。</li>
+      <li data-page-node-id="8UxZ6NJogAXUym8mC77A7m"><strong data-page-node-id="VxSHnnqUiPn5ZwpArteAAC">Phase 4（合规加固）</strong>：内容来源标注、频率控制、可选投稿/白名单替代。</li>
+    </ol>
+    <p class="lead" style="margin-top:14px" data-page-node-id="ODdEOIqZIvm9GNlzCVoKbI">⚠️ 本报告为"研究搜集"阶段交付物，<strong data-page-node-id="5iSQVzukZ8QfNGEinFGfBJ">尚未改动任何页面代码</strong>。具体开发在报告确认后另行执行。</p>
+  </section>
+
+  <footer data-page-node-id="MSOxb23Of3wGtwIT0OEPVT">亚丁大转山徒步平台 · 五大新需求研究报告 · 2026-09-06</footer>
+</div>
+</body>
+</html>
