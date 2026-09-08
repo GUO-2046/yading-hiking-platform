@@ -1,0 +1,813 @@
+/* 稻城亚丁大转山 · 浏览器版规则引擎（与 plan-tool Node 版同源，方案A）
+   生成方式：由 knowledge.js + engine.js 自动转换，勿手改
+   保留方案B：hiking-platform/plan-tool/server.js 的 Node 版原封不动
+   ★ 个性化引擎扩展（2026-09-06 落地）：新增价格库 costs、拍摄机位 shots，
+     evaluateBudget / shotAdvice / generateVariants / personalize 差异化输出 */
+'use strict';
+(function (global) {
+  const KB = {
+  meta: {
+    name: '稻城亚丁大转山（亚丁大环线）',
+    region: '四川 · 甘孜州 · 稻城县',
+    route: '冲古寺 → 卓杰措 → 嘎洛垭口(5036m) → 蛇湖 → 牛奶海 → 五色海 → 出景区',
+    distance: '约 75-78km（轨迹实测 A线 68.28km / B线 63.92km）',
+    elevation: '最高 5036m，累计爬升 3000m+',
+    bestWindow: '10月（雨季结束，天气稳定，雪山能见度极高）',
+    colorTrick: '彩林窗口 9/25 - 10/15',
+    difficulty: '★★★★★ 高海拔重装长线',
+  },
+
+  /* 行程版本（按天数选择） */
+  schedules: {
+    '5': { // 抖音压缩版
+      name: '5 天压缩版',
+      days: [
+        { day: 'D1', route: '香格里拉镇 → 波拥措', dist: '8km', climb: '+800m', camp: '4700m 波拥措', note: '最高营地，可不过夜翻垭口防高反' },
+        { day: 'D2', route: '波拥措 → 贡嘎扎则', dist: '13km', climb: '+500m/-800m', camp: '4100m 贡嘎扎则', note: '夏诺多吉脚下五星营地' },
+        { day: 'D3', route: '贡嘎扎则 → 新果牛场', dist: '16km', climb: '+600m', camp: '4200m 新果牛场', note: '实测风景最佳，无水源' },
+        { day: 'D4', route: '新果 → 蛇湖', dist: '12km', climb: '+600m', camp: '4500m 蛇湖', note: '牧民收费+垃圾回收' },
+        { day: 'D5', route: '蛇湖 → 洛绒牛场 → 游客中心', dist: '12km', climb: '+150m', camp: '出山', note: '松多垭口后出景区' },
+      ],
+    },
+    '7': { // 标准版
+      name: '7 天标准版',
+      days: [
+        { day: 'D1', route: '香格里拉镇集合/适应', dist: '—', climb: '—', camp: '2900m 香格里拉镇', note: '低海拔适应，采购气罐' },
+        { day: 'D2', route: '冲古寺(3990) → 巴玉 → 波用措', dist: '7-9km', climb: '+800m', camp: '4750m 波用措', note: '最高营地，可不过夜翻垭口防高反' },
+        { day: 'D3', route: '波用措 → 措该达垭口 → 嘎洛牛场 → 贡嘎扎则', dist: '13-16km', climb: '+300~370/-900~1000m', pass: '措该达 5036m', camp: '4100m 贡嘎扎则', note: '夏诺多吉脚下五星营地' },
+        { day: 'D4', route: '贡嘎扎则 → 夏诺多吉横切 → 杂巴拉下方/万花池上方', dist: '7-13km', climb: '+400~600/-150~260m', pass: '横切 4500-4530m', camp: '4380-4400m', note: '横切段注意暗冰' },
+        { day: 'D5', route: '杂巴拉下方 → 杂巴拉垭口 → 新果牛场', dist: '9-12km', climb: '+500~760/-600~900m', pass: '杂巴拉 4750m', camp: '4300m 新果牛场', note: '实测风景最佳，无水源' },
+        { day: 'D6', route: '新果 → 黑湖垭口 → 蛇湖营地', dist: '11-13km', climb: '+550~700m', pass: '黑湖 4720-4750/蛇湖 4730m', camp: '4500-4650m 蛇湖', note: '爬升按 700-900m 准备' },
+        { day: 'D7', route: '蛇湖 → 松多垭口 → 五色海/牛奶海 → 出景区', dist: '11-12km', climb: '+150~500m', pass: '松多 4670-4710m', camp: '出山', note: '最后一天观景精华段' },
+      ],
+    },
+    '8': { // 完整版
+      name: '8 天完整版',
+      days: [
+        { day: 'D1', route: '香格里拉镇集合/适应', dist: '—', climb: '—', camp: '2900m 香格里拉镇', note: '低海拔适应，采购气罐' },
+        { day: 'D2', route: '冲古寺(3990) → 巴玉 → 波用措', dist: '7-9km', climb: '+800m', camp: '4750m 波用措', note: '最高营地' },
+        { day: 'D3', route: '波用措 → 措该达垭口 → 嘎洛牛场 → 贡嘎扎则', dist: '13-16km', climb: '+300~370/-900~1000m', pass: '措该达 5036m', camp: '4100m 贡嘎扎则', note: '夏诺多吉脚下五星营地' },
+        { day: 'D4', route: '贡嘎扎则 → 夏诺多吉横切 → 杂巴拉下方/万花池上方', dist: '7-13km', climb: '+400~600/-150~260m', pass: '横切 4500-4530m', camp: '4380-4400m', note: '' },
+        { day: 'D5', route: '杂巴拉下方 → 杂巴拉垭口 → 新果牛场', dist: '9-12km', climb: '+500~760/-600~900m', pass: '杂巴拉 4750m', camp: '4300m 新果牛场', note: '无水源' },
+        { day: 'D6', route: '新果 → 黑湖垭口 → 蛇湖营地', dist: '11-13km', climb: '+550~700m', pass: '黑湖 4720-4750m', camp: '4500-4650m 蛇湖', note: '' },
+        { day: 'D7', route: '蛇湖 → 卡斯牛棚', dist: '10-12km', climb: '+200m', camp: '4430m 卡斯牛棚', note: '8 天版分两天出山' },
+        { day: 'D8', route: '卡斯 → 松洛垭口(4650) → 珍珠海 → 冲古寺', dist: '11km', climb: '+400m/-800m', pass: '松洛 4650m', camp: '出山', note: '经珍珠海回冲古寺' },
+      ],
+    },
+  },
+
+  /* 营地 */
+  camps: {
+    '波拥措': { alt: '4700m', fee: '免费', note: '最高营地，可不过夜翻垭口防高反' },
+    '贡嘎扎则': { alt: '4100m', fee: '30 元', note: '夏诺多吉脚下五星营地' },
+    '万花池': { alt: '4200m', fee: '牛棚 50/营地 30', note: '可烤火烘鞋' },
+    '新果牛场': { alt: '4300m', fee: '50 元', note: '实测风景最佳，无水源' },
+    '蛇湖': { alt: '4500-4650m', fee: '50 元', note: '牧民收费+垃圾回收' },
+    '嘎洛牛场': { alt: '4420m', fee: '可住宿', note: '可作下撤点；牧民卓姆 15756878680（需验证）' },
+    '卡斯牛棚': { alt: '4430m', fee: '—', note: '8 天版 D7' },
+  },
+
+  /* 免票预约 */
+  ticket: {
+    freePeriod: '2026-08-01 至 10-31，门票+观光车+大巴全免（官方公告）',
+    shuttleFree: '观光车/电瓶车自 5/29 起因提级整治暂停收费（免费）；官方电话 0836-6966022',
+    releaseTime: '每日 07:00 放票（用户确认不是晚上12点，07:00 待最终确认）',
+    window: '预约提前期约 15 天（用户实测 9/4 能约 9/19；另有 10 天说法，按 15 天执行）',
+    dailyLimit: '限流 15,000 人/日（另有 16,000 说法），国庆约满快',
+    channel: '「稻城亚丁」微信小程序 / 官方公众号 + OTA（携程/美团/飞猪/去哪儿/同程）',
+    entry: '身份证原件刷证，人证票合一；现场窗口不卖票；一次入园（7 天中途不出景区正合适）',
+    hours: '游客中心 7:00-16:40；长线挑战线 8:00-14:30 开放',
+    fireSeason: '防火期 10/1 - 次年 6/30，严禁携带火源（打火机、火柴等）',
+    banned: '无人机、宠物禁入；牛奶海/五色海/卡斯区域封闭管理',
+    refund: '游览日前 24h 以上免费退订；24h 内收 4%；过期未入园收 10%',
+    bookingUrl: '「稻城亚丁」微信小程序搜票',
+  },
+
+  /* 交通 */
+  transport: {
+    defaultFrom: '郑州',
+    train: 'D49 郑州 17:16 → 成都东 07:55（硬座过夜，10/3 早到）',
+    van: {
+      contact: '13211710192（微信同号）／ 13330513530（微信同号）',
+      desc: '成都市区 ↔ 稻城县 / 香格里拉镇（亚丁景区门口）；成都→稻城 8:00-13:00 发；约 12h；5/7/9 座随机；成都三环内/机场/高铁站接送；天天发车',
+      ask: '需问：班次、价格、定金、走线（确认主干道）',
+      price: '拼车约 450 元/人（主方案，明码标价待确认）',
+    },
+    route: '成都 → 雅康 → 折多山 → 新都桥 → 理塘 → 稻城 → 香格里拉镇（主干道）',
+    g227: 'G227 管制段为「香格里拉镇→凉山木里」支线（泸亚东线），成都→理塘→稻城→香格里拉镇主干道不受影响；出发前查「甘孜交警」确认无新增管制',
+    return: '香格里拉镇 → 成都（专线 3:00-13:00 发）或稻城机场',
+    planB: '备选：10/3 成都→康定/雅江/理塘（4-7h）住一晚，10/4 再进镇',
+  },
+
+  /* 住宿 */
+  hotels: {
+    '香格里拉镇': { alt: '2900m', low: '床位 80-100 / 标间 200-300', holiday: '床位约 200 / 标间 600 起', dist: '距景区 1-2.5km', rec: '首选（低海拔适应）' },
+    '亚丁村': { alt: '4060m', low: '床位 100-150 / 标间 400', holiday: '床位 200-300 / 标间 800-1200', dist: '景区内', rec: '不建议（高反风险）' },
+    '稻城县城': { alt: '3750m', low: '标间约 150', holiday: '标间 400-500', dist: '距景区 70-80km', rec: '太远不推荐' },
+  },
+
+  /* 天气（10 月上中旬） */
+  weather: {
+    day: '白天 10-18℃',
+    night: '夜间 -2~6℃',
+    earlyOct: '10/3-4 多云午后山区阵雨（带雨衣）',
+    dry: '10/5 起干季晴空率高',
+    passSnow: '垭口 10 月可能短时降雪+暗冰；「白天过垭口、午后不上山」',
+    sleep: '睡袋按 -15℃ 级（充绒 800-900F），带冰爪雪套',
+    bestByData: '10/12-13 历史评分最高（Open-Meteo 验证）',
+  },
+
+  /* 装备 */
+  gear: {
+    userConfirmed: [
+      '羽绒睡袋（-15℃ 级）', '55L 重装背包', '双人三季帐篷', '充气睡垫（R 值 8）',
+      '充气枕', '帐篷地垫/防潮垫', '分体式炉头', '高压锅（高海拔焖煮）', '雨衣+防水袋',
+      '净水器（过滤型，型号自选）', '冲锋衣裤', '羽绒服', '抓绒衣裤', '美利奴羊毛内衣',
+      '羊毛袜', '五指袜', '头灯',
+    ],
+    octAdd: [
+      '冰爪', '雪套', '登山杖', '保暖手套', '抓绒帽', '墨镜/雪镜', 'SPF50+ 防晒霜',
+      '唇膏', '保温杯', '现金', '高帮防水徒步鞋',
+    ],
+    medicine: ['感冒药/退烧药', '布洛芬', '葡萄糖', '血氧仪', '红景天（提前服）', '便携氧气罐'],
+    stove: '气罐：香格里拉镇/稻城县城户外店购买高原气罐（丙烷/异丁烷混合）；防火期禁带火源；一大瓶够 7 天',
+    note: '重装耗时比轻装上浮 30-50%',
+    /* ★ 网上经验增补（驴友/攻略实证，2026-09 汇集）——结合网评优化装备选择 */
+    proTips: [
+      '背包：55-65L 按需，OSPREY 苍穹/小鹰、Gregory Baltoro 或 Deuter Aircontact 反馈佳；腰带要贴合，重装肩带别太紧',
+      '睡袋：-15℃ 级 800-900F 充绒；三季帐在 10 月垭口夜间够用，但建议加一层地布防潮防冰',
+      '睡垫：R 值 8 的充气垫+铝箔地垫双垫组合，实测冷夜睡得稳；避免纯泡沫垫',
+      '炉头：分体式（如 Soto / 火枫野火）抗风好；高原必须用高原气罐（丙烷/异丁烷混合），普通气罐火力弱易冻',
+      '净水：10 月多数营地水源冷冽，推荐 Sawyer Mini / 康迪 或 MSR 重力滤水器，比煮沸省气省时',
+      '徒步鞋：高帮防水+大半码（下山顶脚趾），新鞋提前穿两周磨合；配羊毛袜防磨脚泡',
+      '登山杖：双杖必备，下陡坡省膝盖 30%+，选外锁碳纤维（如 BD Trail / 鲁滨逊）',
+      '头部：头灯选 300 流明以上+备用电池（BD / 奈特科尔）；羽绒帽+抓绒帽叠戴防风',
+      '雨具：建议分体雨衣裤（比雨披抗风），冲锋衣 DWR 喷剂提前处理防进水',
+      '保暖层：美利奴羊毛内衣排汗 + 抓绒中间层 + 羽绒服外层「三层穿衣法」，垭口风大必须防风层',
+      '小物：保温杯 1L、魔术头巾、防水袋（衣物/电子分开）、垃圾袋、针线包、湿巾、口哨',
+      '通讯：全程无信号，带卫星通话/北斗短报文（或租借）+ 下载两步路/奥维离线地图双备份',
+      '高反药：红景天提前 1 周服（心理安慰>实测），实际靠逐步适应+布洛芬+葡萄糖+血氧仪监测',
+      '气罐容量：7 天行程 1 大罐（230g 高原罐）+ 1 小罐备用；镇上/县城户外店可买，防火期 10/1 起禁带火源',
+      '充电：早晚低温电池掉电快，带 20000mAh 以上充电宝+把电池贴身保温',
+    ],
+  },
+
+  /* 商业队参考（可选报团） */
+  teams: [
+    { name: '尚野户外', contact: '稳稳 13813381134', price: '3980 元（9.30-10.6）' },
+    { name: '去山野', contact: '蜗牛 13393899511', price: '重装 3280 / 轻装 4680' },
+    { name: '风驰户外', contact: '北风 13911625851', price: '3380 元' },
+    { name: 'i 旅行', contact: '小i 15501026775', price: '3380 元' },
+    { name: '蜀尚户外', contact: '—', price: '10/3 成都集合 5480 元' },
+  ],
+
+  /* 风险清单 */
+  risks: [
+    '高反：最高 5036m，营地 3700-4700m，提前服红景天，带血氧仪+氧气罐，出现严重症状立即下撤',
+    '垭口暗冰：10 月垭口可能短时降雪+暗冰，冰爪雪套必带，「白天过垭口、午后不上山」',
+    '失温：夜间 -2~6℃，羽绒服/抓绒/雨衣三件套随身，禁止淋湿后停留',
+    '水源：新果牛场无水源，需提前备足；部分营地需滤水',
+    '无信号：全程无信号无补给，下载离线地图（两步路/奥维），GPS+纸质地图双备份',
+    '疲劳：重装耗时上浮 30-50%，每日 7-16km，量力而行，可拆分休息',
+    '火灾：防火期 10/1 起禁带火源，气罐只能当地买，灶具注意防火',
+    '野生动物：不主动投喂，食物密封悬挂',
+  ],
+
+  /* 组队/下撤 */
+  safety: {
+    retreat: '嘎洛牛场可作下撤点（牧民卓姆 15756878680，需验证）',
+    aA: '8264 AA 重装群主微信 zhb7171608（时间不明需验证）',
+    outdoorService: '亚丁景区官方救援 + 当地向导可联系',
+  },
+
+  /* 待核事项（生成攻略时标注提醒） */
+  pending: [
+    '放票确切时间点（07:00 待最终确认）',
+    '观光车/电瓶车票种是否 0 元（电话 0836-6966022）',
+    '专线明码标价（13211710192）',
+    '滤水器型号（净水方案）',
+    'G227 主干道 10 月新增管制（出发前查）',
+  ],
+
+  /* ★ 价格库（个性化预算评估用，2026-09 汇集） */
+  costs: {
+    currency: '元/人（国庆档）',
+    train: { label: '火车', zhengzhou: '郑州→成都 D49 硬座约 200', other: '高铁二等座约 500-800（按实际）', desc: '按出发地实际查询为准' },
+    // ★ 多城市→成都 可选车次清单（需求：每个出发城市都显示详细车次让用户选择；时刻/票价 2026-09 检索，以 12306 实际为准）
+    //   城市 key 与 fromCity 输入做模糊匹配：北京/上海/西安/广州/重庆/武汉/郑州，其余走 other 兜底
+    trains: {
+      zhengzhou: [
+        { no: 'D49',  from: '郑州',   dep: '17:16', to: '成都东', arr: '07:55 +1', dur: '14小时39分', cls: '二等座 ¥297 / 二等卧 ¥441 / 一等卧 ¥625', note: '夜间动车，睡一觉第二天早上到，省一晚住宿' },
+        { no: 'D973', from: '郑州东', dep: '23:45', to: '成都东', arr: '08:57 +1', dur: '9小时12分',  cls: '二等座 ¥340 / 动卧 ¥430', note: '夜班动车，动卧可躺' },
+        { no: 'D977', from: '郑州东', dep: '23:51', to: '成都东', arr: '09:01 +1', dur: '9小时10分',  cls: '二等座 ¥340 / 动卧 ¥430', note: '夜班动车，动卧可躺' },
+        { no: 'D995', from: '郑州东', dep: '23:56', to: '成都东', arr: '08:41 +1', dur: '8小时45分',  cls: '二等座 ¥424.5 / 动卧 ¥650', note: '夜班动车，动卧可躺' },
+        { no: 'Z315', from: '郑州',   dep: '23:35', to: '成都西', arr: '20:34 +1', dur: '20小时59分', cls: '硬座 ¥180.5 / 硬卧 ¥310.5', note: '直达特快，最省钱' },
+        { no: 'K291', from: '郑州',   dep: '22:19', to: '成都西', arr: '19:27 +1', dur: '21小时8分',  cls: '硬座 ¥180.5 / 硬卧 ¥310.5', note: '普快，最便宜' },
+      ],
+      beijing: [
+        { no: 'G321',  from: '北京西',  dep: '07:00', to: '成都东', arr: '14:30',     dur: '7小时30分', cls: '二等座 ¥918 / 一等座 ¥1468', note: '白天高铁，当天到' },
+        { no: 'G1591', from: '北京西',  dep: '09:40', to: '成都东', arr: '19:31',     dur: '9小时51分', cls: '二等座 ¥779 / 一等座 ¥1246', note: '白天高铁，当天到' },
+        { no: 'D49',   from: '北京西',  dep: '11:07', to: '成都东', arr: '07:55 +1',  dur: '20小时48分', cls: '二等座 ¥363 / 二等卧 ¥578 / 一等卧 ¥883', note: '夜车卧铺，省一晚住宿' },
+        { no: 'D15',   from: '北京西',  dep: '17:00', to: '成都东', arr: '14:18 +1',  dur: '21小时18分', cls: '二等座 ¥356 / 二等卧 ¥554 / 一等卧 ¥878', note: '夜车卧铺，省一晚住宿' },
+        { no: 'D995',  from: '北京丰台', dep: '20:36', to: '成都东', arr: '08:41 +1',  dur: '12小时5分',  cls: '二等座 ¥636 / 动卧 ¥900', note: '夕发朝至动卧' },
+        { no: 'K117',  from: '北京西',  dep: '11:54', to: '成都西', arr: '19:16 +1',  dur: '31小时22分', cls: '硬座 ¥251 / 硬卧 ¥426', note: '普速最便宜' },
+      ],
+      shanghai: [
+        { no: 'D2206', from: '上海虹桥', dep: '06:01', to: '成都东', arr: '21:53',     dur: '15小时52分', cls: '二等座 ¥721 / 二等卧 ¥1150', note: '动车卧铺可选' },
+        { no: 'D352',  from: '上海虹桥', dep: '06:12', to: '成都东', arr: '20:33',     dur: '14小时21分', cls: '二等座 ¥719 / 二等卧 ¥1140', note: '动车卧铺可选' },
+        { no: 'D636',  from: '上海虹桥', dep: '06:22', to: '成都东', arr: '20:40',     dur: '14小时18分', cls: '二等座 ¥690 / 二等卧 ¥1100', note: '动车卧铺可选' },
+        { no: 'G1974', from: '上海虹桥', dep: '07:16', to: '成都东', arr: '18:26',     dur: '11小时10分', cls: '二等座 ¥1040 / 一等座 ¥1664', note: '白天高铁，最快到' },
+        { no: 'G3288', from: '上海虹桥', dep: '07:46', to: '成都东', arr: '19:55',     dur: '12小时9分',  cls: '二等座 ¥1003 / 一等座 ¥1605', note: '白天高铁' },
+        { no: 'D952',  from: '上海虹桥', dep: '08:30', to: '成都东', arr: '21:01',     dur: '12小时31分', cls: '二等座 ¥723 / 二等卧 ¥1150', note: '动车卧铺可选' },
+        { no: 'G237',  from: '上海虹桥', dep: '09:04', to: '成都东', arr: '19:35',     dur: '10小时31分', cls: '二等座 ¥1065 / 一等座 ¥1704', note: '白天高铁' },
+      ],
+      xian: [
+        { no: 'G3437', from: '西安北', dep: '07:33', to: '成都东', arr: '11:06',     dur: '3小时33分', cls: '二等座 ¥263 / 一等座 ¥421', note: '高铁最快 3 小时档' },
+        { no: 'G2239', from: '西安北', dep: '07:40', to: '成都东', arr: '11:24',     dur: '3小时44分', cls: '二等座 ¥300 / 一等座 ¥480', note: '白天高铁' },
+        { no: 'G3763', from: '西安北', dep: '08:02', to: '成都东', arr: '12:03',     dur: '4小时1分',  cls: '二等座 ¥285 / 一等座 ¥456', note: '白天高铁' },
+        { no: 'G323',  from: '西安北', dep: '19:17', to: '成都东', arr: '22:30',     dur: '3小时13分', cls: '二等座 ¥285 / 一等座 ¥456', note: '晚间高铁，当日到' },
+        { no: 'D995',  from: '西安北', dep: '05:13', to: '成都东', arr: '08:41',     dur: '3小时28分', cls: '二等座 ¥263 / 动卧 ¥400', note: '清晨动卧早到' },
+        { no: 'D973',  from: '西安北', dep: '05:30', to: '成都东', arr: '08:57',     dur: '3小时27分', cls: '二等座 ¥210 / 动卧 ¥270', note: '清晨动车' },
+        { no: 'K291',  from: '西安',   dep: '05:40', to: '成都西', arr: '19:27',     dur: '13小时47分', cls: '硬座 ¥128.5 / 硬卧 ¥219.5', note: '普速最便宜' },
+      ],
+      guangzhou: [
+        { no: 'G3886', from: '广州南', dep: '06:37', to: '成都东', arr: '14:20',     dur: '7小时43分', cls: '二等座 ¥666 / 一等座 ¥1066', note: '白天高铁，当天到' },
+        { no: 'D1804', from: '广州南', dep: '07:17', to: '成都东', arr: '16:55',     dur: '9小时38分', cls: '二等座 ¥645 / 二等卧 ¥1030', note: '动车卧铺可选' },
+        { no: 'D1820', from: '广州南', dep: '09:30', to: '成都东', arr: '20:06',     dur: '10小时36分', cls: '二等座 ¥607 / 二等卧 ¥970', note: '动车卧铺可选' },
+        { no: 'D948',  from: '广州南', dep: '19:01', to: '成都东', arr: '08:02 +1',  dur: '13小时1分',  cls: '二等座 ¥578 / 动卧 ¥740', note: '夕发朝至动卧' },
+        { no: 'D964',  from: '广州南', dep: '19:11', to: '成都东', arr: '08:07 +1',  dur: '12小时56分', cls: '二等座 ¥549 / 动卧 ¥700', note: '夕发朝至动卧' },
+        { no: 'D192',  from: '广州白云', dep: '20:50', to: '成都东', arr: '21:39 +1', dur: '24小时49分', cls: '二等座 ¥410 / 二等卧 ¥614', note: '卧铺过夜' },
+        { no: 'Z586',  from: '广州',   dep: '22:41', to: '成都西', arr: '18:42 +1',  dur: '20小时1分',  cls: '硬座 ¥201 / 硬卧 ¥337', note: '普速最便宜' },
+      ],
+      chongqing: [
+        { no: 'G8690', from: '重庆北', dep: '05:53', to: '成都东', arr: '07:16',     dur: '1小时23分', cls: '二等座 ¥148 / 一等座 ¥237', note: '成渝高铁最快' },
+        { no: 'D49',   from: '重庆北', dep: '05:25', to: '成都东', arr: '07:55',     dur: '2小时30分', cls: '二等座 ¥85 / 二等卧 ¥120', note: '动车性价比高' },
+        { no: 'D961',  from: '重庆西', dep: '06:09', to: '成都东', arr: '08:07',     dur: '1小时58分', cls: '二等座 ¥97 / 动卧 ¥210', note: '动车' },
+        { no: 'C77',   from: '重庆北', dep: '06:18', to: '成都东', arr: '09:14',     dur: '2小时56分', cls: '二等座 ¥94 / 一等座 ¥150', note: '城际动车' },
+        { no: 'G1836', from: '重庆北', dep: '08:02', to: '成都东', arr: '09:26',     dur: '1小时24分', cls: '二等座 ¥146 / 一等座 ¥234', note: '成渝高铁' },
+      ],
+      wuhan: [
+        { no: 'G3463', from: '汉口',  dep: '09:02', to: '成都东', arr: '16:07',     dur: '7小时5分',  cls: '二等座 ¥643 / 一等座 ¥1029', note: '白天高铁' },
+        { no: 'D618',  from: '武汉',  dep: '08:54', to: '成都东', arr: '18:45',     dur: '9小时51分', cls: '二等座 ¥418 / 二等卧 ¥670', note: '动车卧铺可选' },
+        { no: 'D2259', from: '汉口',  dep: '10:45', to: '成都东', arr: '19:38',     dur: '8小时53分', cls: '二等座 ¥391 / 二等卧 ¥630', note: '动车卧铺可选' },
+        { no: 'D2373', from: '汉口',  dep: '11:33', to: '成都东', arr: '20:27',     dur: '8小时54分', cls: '二等座 ¥375 / 二等卧 ¥600', note: '动车' },
+        { no: 'D3057', from: '汉口',  dep: '12:38', to: '成都东', arr: '21:46',     dur: '9小时8分',  cls: '二等座 ¥350 / 二等卧 ¥560', note: '动车' },
+        { no: 'D192',  from: '武昌',  dep: '08:14', to: '成都东', arr: '21:39',     dur: '13小时25分', cls: '二等座 ¥265 / 二等卧 ¥376', note: '动车，最便宜' },
+      ],
+      other: [
+        { no: '通用', from: '', dep: '—', to: '成都', arr: '—', dur: '高铁 5-8h / 普速 12-24h', cls: '二等座约 ¥500-800（按实际查询）', note: '请用 12306 查询你所在城市到成都的车次' },
+      ],
+    },
+    van: { label: '专线拼车', price: 450, unit: '元/人 成都→香格里拉镇（明码标价待确认）' },
+    ticket: { label: '门票+观光车', price: 0, note: '8/1-10/31 免票期，观光车同步免费（官方公告）' },
+    shuttle: { label: '景区电瓶车', price: 0, note: '自 5/29 提级整治暂停收费' },
+    dorm: { label: '香格里拉镇住宿·床位', low: 80, holiday: 200, unit: '元/晚' },
+    stdRoom: { label: '香格里拉镇·标间', low: 200, holiday: 600, unit: '元/晚' },
+    mule: { label: '马帮驮包', price: 150, unit: '元/包·日（或 300-500 全程）' },
+    gas: { label: '高原气罐', price: 50, unit: '元/罐（一大瓶够 7 天）' },
+    food: { label: '每日餐饮', price: 60, unit: '元/人·日（镇上）' },
+    team: { label: '商业队', range: '3280-5480', unit: '元/人（含向导/部分马帮）' },
+    // ★ 香格里拉镇/仁村 住宿选择列表（需求：可选列表+参考价+电话；2026-09 检索真实电话）
+    hotels: [
+      { name: '静谧小应客栈（仁村·游客中心店）', area: '仁村', dist: '距游客中心步行 5-6 分钟', low: '床位 80-100 / 标间 200-300', holiday: '床位约 200 / 标间 500-600', tel: '18116505818', note: '石墨烯取暖 24h 供暖 + 吸氧设备 + 免费停车，老板娘常驻' },
+      { name: '稻城雪域幸福客栈（仁村）', area: '仁村', dist: '距游客中心约 500m', low: '标间 150-250', holiday: '标间 300-500', tel: '18783698483', note: '免费停车场 + 藏餐体验 + 低海拔（2900m）' },
+      { name: '稻城亚丁璞美客艺术酒店', area: '香格里拉镇', dist: '仁村游客中心旁', low: '高级标间 300-450', holiday: '高级标间 450-600', tel: '0836-6967999', note: '游客中心旁，离景区最近，评分 4.8' },
+      { name: '稻城红景天大酒店', area: '香格里拉镇', dist: '新游客中心正对面', low: '特惠双床 250-380', holiday: '特惠双床 380-500', tel: '0836-6967666', note: '正对游客中心，进出方便，评分 4.7' },
+      { name: '稻城亚丁贡金莲日酒店', area: '香格里拉镇', dist: '洛克小道 15 号', low: '双床 400-500', holiday: '双床 500-700', tel: '0836-5721666', note: '藏式风格，评分 4.9，洛克小道内' },
+      { name: '稻城亚丁智选假日酒店', area: '香格里拉镇', dist: '俄初路 26 号', low: '标准双床 400-540', holiday: '标准双床 540-700', tel: '18581833255', note: '连锁品质稳定，评分 4.7' },
+      { name: '稻城天街印象酒店', area: '香格里拉镇', dist: '亚丁天街 11/12 幢', low: '商务标间 200-260', holiday: '商务标间 260-400', tel: '0836-5729999', note: '镇上商圈，吃饭购物方便' },
+      { name: '稻城贡嘎大酒店', area: '稻城县城', dist: '距景区 70-80km', low: '标准双床 150-200', holiday: '标准双床 200-300', tel: '0836-5721222', note: '县城低海拔，价格实惠，但离景区远，不推荐首晚' },
+    ],
+  },
+
+  /* ★ 拍摄机位（个性化"在哪个位置拍哪边的山"） */
+  shots: [
+    { camp: '波拥措', peak: '三神山同框+倒影', best: '清晨/傍晚', tip: '波拥措是唯一三神山同框倒影点，日出日照金山倒映湖面，带 24mm 广角+偏振镜' },
+    { camp: '贡嘎扎则', peak: '夏诺多吉', best: '清晨（东南面金山）/ 夜间星空', tip: '夏诺多吉脚下五星营地，银河季 10 月仍可见，三脚架+长曝光拍星轨' },
+    { camp: '万花池', peak: '夏诺多吉', best: '清晨', tip: '雪山横切段起点，晨光打在夏诺多吉东坡' },
+    { camp: '新果牛场', peak: '央迈勇东壁', best: '下午', tip: '实测风景最佳，无水源；下午斜光拍央迈勇东壁层次感最强' },
+    { camp: '蛇湖', peak: '央迈勇+仙乃日西侧', best: '清晨（蛇湖晨雾）', tip: '蛇湖西侧是拍央迈勇倒影最佳机位，清晨雾气+湖面倒影双景' },
+    { camp: '嘎洛牛场', peak: '措该达垭口视角', best: '垭口前后', tip: '措该达垭口(5036m)回望三神山，可作下撤点' },
+    { camp: '卡斯牛棚', peak: '松洛垭口/珍珠海方向', best: '出山清晨', tip: '8 天版经珍珠海出山，湖面倒影仙乃日' },
+  ],
+};
+
+/* 规则引擎：根据用户输入 + 知识库，生成专属攻略 */
+
+
+
+/* 中文月份 → 数字 */
+const MONTH_MAP = { '1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'11':11,'12':12 };
+
+/* 依据月份返回天气与建议 */
+function weatherByMonth(m) {
+  const KBW = KB.weather;
+  if (m === 10) {
+    return {
+      season: '黄金徒步季',
+      summary: `十月是川西黄金徒步季。${KBW.day}，${KBW.night}。${KBW.earlyOct}，${KBW.dry}。${KBW.bestByData}。`,
+      alert: KBW.passSnow,
+    };
+  }
+  if (m === 9) {
+    return {
+      season: '彩林初现',
+      summary: '九月下旬进入彩林窗口（9/25-10/15 颜值天花板）。天气较稳定，但雨季尾巴仍在，午后山区阵雨概率高于十月。',
+      alert: '9 月垭口暗冰概率低于 10 月，但仍需备冰爪雪套；午后山区阵雨需带雨衣。',
+    };
+  }
+  if (m === 11) {
+    return {
+      season: '深秋初雪',
+      summary: '十一月气温骤降，垭口降雪概率显著升高，白天 5-15℃、夜间 -8~0℃。日照金山概率仍高但天气窗口变短。',
+      alert: '深秋初雪，冰爪雪套必带，羽绒睡袋需 -20℃ 或更低温标，防失温是核心。',
+    };
+  }
+  if (m >= 5 && m <= 8) {
+    return {
+      season: '雨季/夏末',
+      summary: '夏季为雨季，天气不稳定，山区每日午后阵雨概率高，垭口云雾多、雪山可见度下降。',
+      alert: '雨季进山需强化防水（雨衣+防水袋+防水鞋），蛇湖等垭口云雾大能见度低，谨慎通过。',
+    };
+  }
+  return {
+    season: '非推荐窗口',
+    summary: `${m} 月非亚丁大转山的最佳窗口（冬季大雪封山风险高，部分垭口不可行）。建议优先考虑 9 月下旬-11 月上旬。`,
+    alert: '非推荐月份进山风险较高，请务必咨询当地向导并评估路况。',
+  };
+}
+
+/* 依据经验/重装/天数返回日程表与备注 */
+function scheduleByInput({ days, experience, load }) {
+  const dKey = String(days);
+  const sched = KB.schedules[dKey] || KB.schedules['7'];
+  const notes = [];
+  if (load === 'heavy') notes.push('重装耗时比轻装上浮 30-50%，每日里程建议按下限执行');
+  if (experience === 'beginner') notes.push('新手建议：优先 7/8 天完整版，前 1-2 天放慢节奏适应海拔；可考虑报名商业队（见攻略）');
+  if (experience === 'pro') notes.push('老手可尝试 5 天压缩版，注意保持节奏，避免高反');
+  return { sched, notes };
+}
+
+/* ★ 经验水平差异化建议：天数/每日里程/垭口/装备/风险等级（让"新手/中等/老手"选择有意义） */
+function experienceAdvice(exp) {
+  const E = {
+    beginner: {
+      label: '新手',
+      level: 'L1',
+      days: '建议 8 天完整版（或至少 7 天）',
+      pace: '每日徒步 ≤ 10km，前 2 天放慢适应海拔',
+      pass: '垭口全部按"白天 12:00 前通过"执行，避开午后变天',
+      gear: '强制：血氧仪+便携氧气罐+冰爪雪套；可租马帮减负',
+      risk: '高风险：高海拔重装新手首次 5000m+，强烈建议结伴或报商业队',
+      note: '第一次走 5000m 级路线，把"安全下撤"当作第一原则',
+    },
+    medium: {
+      label: '中等',
+      level: 'L2',
+      days: '7 天标准版最合适',
+      pace: '每日 7-16km，量力而行可拆分休息',
+      pass: '垭口按"白天通过"，遇雪/风大果断下撤',
+      gear: '标准重装即可，冰爪雪套必备',
+      risk: '中高风险：高海拔经验不足仍需警惕高反，前 1 天适应',
+      note: '有基础体能储备，重点在节奏控制与天气窗口判断',
+    },
+    pro: {
+      label: '老手',
+      level: 'L3',
+      days: '可尝试 5 天压缩版（或 7 天留机动日）',
+      pace: '每日 13-16km 无压力，可按上限执行',
+      pass: '可根据天气窗口灵活安排，仍守"午后不上山"底线',
+      gear: '精简装备走快线，净水/炉具按自给自足配置',
+      risk: '中风险：能力足够，但 5000m+ 高原仍是最大变量',
+      note: '把经验用在路线机动性上，但不挑战天气',
+    },
+  };
+  return E[exp] || E.medium;
+}
+
+/* ★ 健康输入差异化：高反史/膝盖/老人小孩 → 额外建议 + 强制约束 */
+function healthAdvice(health) {
+  const h = health || {};
+  const out = [];
+  let force = [];
+  if (h.amr === 'yes') {
+    out.push('你有高反史：本路线最高 5036m，建议强制安排 1 个低海拔适应日（香格里拉镇 2900m 住 2 晚），并随身血氧仪，血氧 <80% 立即下撤');
+    force.push('AMR');
+  }
+  if (h.knee === 'bad') {
+    out.push('膝盖旧伤：避开陡降段（措该达 -900m 下降段），建议 D3 拆分为两天或雇马帮轻装，护膝+登山杖双杖必带');
+    force.push('KNEE');
+  }
+  if (h.family === 'yes') {
+    out.push('携带老人/儿童：此路线高海拔高强度，12 岁以下不建议上 5000m 垭口；建议改走短线（洛绒牛场往返）或景区成熟路线');
+    force.push('FAMILY');
+  }
+  if (h.alt === 'yes' && h.amr === 'no') {
+    out.push('平时久居低海拔（<200m）：建议提前 1-2 天到成都/康定过渡，进山前在 2900m 充分适应');
+    force.push('LOW');
+  }
+  return { tips: out, force };
+}
+
+/* ★ 城市 key 匹配：从出发城市输入匹配 trains 表 key；未命中返回 other */
+function cityKeyOf(fromCity) {
+  const c = (fromCity || '').replace(/市$/, '').trim();
+  if (c.includes('北京')) return 'beijing';
+  if (c.includes('上海')) return 'shanghai';
+  if (c.includes('西安')) return 'xian';
+  if (c.includes('广州')) return 'guangzhou';
+  if (c.includes('重庆')) return 'chongqing';
+  if (c.includes('武汉')) return 'wuhan';
+  if (c.includes('郑州')) return 'zhengzhou';
+  return 'other';
+}
+
+/* 取某城市车次表里最便宜的票价数字（作为默认交通参考） */
+function minTrainPrice(trains) {
+  if (!trains || !trains.length) return null;
+  let best = null;
+  trains.forEach(t => {
+    const m = (t.cls || '').match(/(?:¥|￥)\s*(\d+(?:\.\d+)?)/);
+    if (m) { const v = Number(m[1]); if (best === null || v < best) best = v; }
+  });
+  return best;
+}
+
+/* 解析酒店参考价：优先提取「床位」档（单人价）与「标间/双床/标准」档（整间价）；
+   轻装取床位档，重装取标间档（整间按人数摊），返回人均每晚 per */
+function parseHotelRef(ref, isLight, group) {
+  const roomKw = /(?:标间|双床|双人|标准|高级标间|特惠双床)/;
+  const bedM = ref.match(/床位[^\d]*(\d+(?:\.\d+)?)\s*[-~]\s*(\d+(?:\.\d+)?)/);
+  const bedS = ref.match(/床位[^\d]*(\d+(?:\.\d+)?)/);
+  const roomM = ref.match(new RegExp(roomKw.source + '[^\\d]*(\\d+(?:\\.\\d+)?)\\s*[-~]\\s*(\\d+(?:\\.\\d+)?)'));
+  const roomS = ref.match(new RegExp(roomKw.source + '[^\\d]*(\\d+(?:\\.\\d+)?)'));
+  const bed = bedM ? (Number(bedM[1]) + Number(bedM[2])) / 2 : (bedS ? Number(bedS[1]) : null);
+  const room = roomM ? (Number(roomM[1]) + Number(roomM[2])) / 2 : (roomS ? Number(roomS[1]) : null);
+  let per = null;
+  if (isLight) per = bed !== null ? bed : (room !== null ? room / Math.min(group, 2) : null);
+  else per = room !== null ? room / Math.min(group, 2) : (bed !== null ? bed : null);
+  return { bed, room, per };
+}
+
+/* ★ 预算驱动酒店推荐（核心）：总预算 − 交通/门票/餐饮/气罐/马帮 → 住宿可支配额 → 人均每晚上限 → 从酒店库筛选价位匹配的推荐
+   返回首推 + 备选（含电话），供前端结果页展示；不再让用户手动选酒店 */
+function recommendHotels(C, { budget, baseCost, isLight, holiday, group, hostelNights }) {
+  const disposable = budget - baseCost;                                  // 住宿可支配（元，整趟）
+  const perNightCap = Math.max(0, disposable) / Math.max(1, hostelNights) / Math.min(group, 2); // 人均每晚上限
+  const scored = (C.hotels || []).map(h => {
+    const ref = holiday ? (h.holiday || h.low) : (h.low || h.holiday);
+    if (!ref) return null;
+    const p = parseHotelRef(ref, isLight, group);
+    if (p.per === null) return null;
+    return { h, ref, isBed: p.bed !== null, per: Math.round(p.per * 100) / 100 };
+  }).filter(Boolean).sort((a, b) => a.per - b.per);
+
+  const affordable = scored.filter(s => s.per <= perNightCap + 0.01);
+  const pool = affordable.length ? affordable : scored;                   // 预算不够则退到最便宜的一档
+  let primary;
+  if (affordable.length) {
+    primary = isLight ? pool[0] : pool[pool.length - 1];                  // 轻装选最低，舒适选可承受里最好
+  } else {
+    primary = pool[0];
+  }
+  const alternates = pool.filter(s => s !== primary).slice(0, 2);
+  const est = Math.round(primary.per * hostelNights);                     // 住宿人均总额（用于核销）
+
+  return {
+    primary: { name: primary.h.name, area: primary.h.area, dist: primary.h.dist, ref: primary.ref, tel: primary.h.tel, note: primary.h.note, per: primary.per, isBed: primary.isBed },
+    alternates: alternates.map(s => ({ name: s.h.name, area: s.h.area, dist: s.h.dist, ref: s.ref, tel: s.h.tel, per: s.per, isBed: s.isBed })),
+    disposable: Math.round(disposable),
+    perNightCap: Math.round(perNightCap * 100) / 100,
+    est,
+    tight: !affordable.length,
+  };
+}
+
+/* ★ 预算评估：火车+专线+门票+住宿+马帮+气罐+餐饮 全明细核价；有预算则用「预算反推」推荐酒店，预算不够给降档建议 */
+function evaluateBudget(input) {
+  const C = KB.costs;
+  const budget = input.budget ? Number(String(input.budget).replace(/[^\d.]/g, '')) : NaN;
+  const group = Number(input.groupSize) || 1;
+  const days = Number(input.days) || 7;
+  const holiday = isHoliday(input.month);
+  const dorm = holiday ? C.dorm.holiday : C.dorm.low;
+  const room = holiday ? C.stdRoom.holiday : C.stdRoom.low;
+  const nights = Math.max(1, days - 1); // 进山前 1 晚镇上 + 出山 1 晚，简化按 days 计
+  const hostelNights = 2; // 至少镇上住 2 晚（集合+出山）
+  const isLight = input.load === 'light';
+  const cityKey = cityKeyOf(input.fromCity);
+  const trainsList = (C.trains && C.trains[cityKey]) || C.trains.other;
+
+  // ★ 车次联动：按出发城市取真实车次表；用户选中车次则用其票价估算（提取数字）
+  const minPrice = minTrainPrice(trainsList);
+  let trainLabel = `${input.fromCity || '出发地'}→成都 火车最低约 ¥${minPrice || '—'} 起（可选具体车次）`;
+  let trainEst = minPrice || 200;
+  const pickedTrain = (input.pickTrain && trainsList) ? trainsList.find(t => t.no === input.pickTrain) : null;
+  if (pickedTrain) {
+    const m = (pickedTrain.cls || '').match(/(?:¥|￥)\s*(\d+(?:\.\d+)?)/);
+    trainEst = m ? Math.round(Number(m[1])) : (minPrice || 200);
+    trainLabel = `${pickedTrain.no} ${pickedTrain.from} ${pickedTrain.dep} → ${pickedTrain.to} ${pickedTrain.arr}（${pickedTrain.cls}）`;
+  }
+
+  // ★ 非住宿基础花费（用于反推住宿可支配额；马帮仅在明确选择时计入）
+  const wantsMule = input.mule === 'yes' || (input.specialNeed && /马帮|驮包/i.test(input.specialNeed));
+  const baseItems = [
+    { est: trainEst },
+    { est: C.van.price },
+    { est: 0 },                                          // 门票+观光车 免票
+    { est: C.gas.price / group },                        // 气罐人均摊
+    { est: C.food.price * days },                        // 餐饮人均
+  ];
+  if (wantsMule) baseItems.push({ est: C.mule.price * days });
+  const baseCost = Math.round(baseItems.reduce((s, it) => s + it.est, 0));
+
+  // ★ 预算驱动酒店推荐：有预算 → 用「预算−基础花费」反推酒店；无预算 → 默认床位/标间
+  const hasBudget = !isNaN(budget) && budget > 0;
+  let hotelRec;
+  if (hasBudget) {
+    hotelRec = recommendHotels(C, { budget, baseCost, isLight, holiday, group, hostelNights });
+  } else {
+    const defaultPer = isLight ? dorm : Math.round(room / Math.min(group, 2));
+    hotelRec = {
+      primary: {
+        name: isLight ? '香格里拉镇/仁村·床位（轻装精简）' : '香格里拉镇·标间（舒适优先）',
+        area: '香格里拉镇', dist: '', ref: (isLight ? dorm : room) + ' 元/晚 × ' + hostelNights + ' 晚',
+        tel: '', note: '未填预算，按默认推荐。填入预算后可自动匹配价位合适的酒店（含电话）。',
+        per: defaultPer, isBed: isLight,
+      },
+      alternates: [], disposable: null, perNightCap: null, est: defaultPer * hostelNights, tight: false,
+    };
+  }
+  const hotelLabel = `首推「${hotelRec.primary.name}」人均 ${hotelRec.primary.per} 元/晚 × ${hostelNights} 晚`;
+
+  const items = [
+    { k: '🚄 火车', v: trainLabel, est: trainEst },
+    { k: '🚐 专线拼车', v: C.van.price + ' ' + C.van.unit, est: C.van.price, per: true },
+    { k: '🎫 门票+观光车', v: '免票期 0 元', est: 0 },
+    { k: '🏨 镇上住宿', v: hotelLabel, est: hotelRec.est, per: true, hotel: true },
+    { k: '🔥 气罐', v: C.gas.price + ' ' + C.gas.unit, est: C.gas.price, once: true },
+    { k: '🍚 餐饮', v: C.food.price + ' ' + C.food.unit + ' × ' + days + ' 天', est: C.food.price * days, per: true },
+  ];
+  if (wantsMule) {
+    items.push({ k: '🐴 马帮驮包', v: C.mule.price + ' ' + C.mule.unit, est: C.mule.price * days, per: true });
+  }
+
+  // 人均口径（住宿行 est 已是人均值，直接计入；气罐按人均摊）
+  let total = 0;
+  const rows = items.map(it => {
+    let per = it.est;
+    if (it.once) per = it.est / group;             // 气罐按人均摊
+    if (it.hotel) per = it.est;                    // 酒店 est 已是人均
+    total += per;
+    return { k: it.k, v: it.v, per: Math.round(per), note: it.once ? '按' + group + '人分摊' : (it.per ? '人均' : '') };
+  });
+  total = Math.round(total);
+
+  const surplus = hasBudget ? budget - total : null;
+  const tips = [];
+  if (hasBudget && surplus < 0) {
+    tips.push('⚠️ 预估总花费 ' + total + ' 元 超出预算 ' + budget + ' 元（差 ' + Math.abs(surplus) + ' 元）。');
+    // 降档建议（按优先级）
+    if (!isLight) tips.push('→ 建议 1：改轻装（住床位/牛棚，省 ' + Math.round((room - dorm) * 2 + (C.mule.price * days)) + ' 元+）');
+    if (days > 5) tips.push('→ 建议 2：压缩到 5 天，餐饮住宿省 ' + Math.round(C.food.price * (days - 5) + (holiday ? 200 : 80) * 2) + ' 元+');
+    tips.push('→ 建议 3：雇马帮改拼车（多人平摊交通），或选非国庆平日出行住宿省一半');
+  } else if (hasBudget && surplus >= 0) {
+    tips.push('✅ 预估总花费 ' + total + ' 元，在预算 ' + budget + ' 元内，结余 ' + surplus + ' 元。');
+    if (surplus > 500) tips.push('结余充足，可升级：住标间/加雇马帮/多留 1 天机动。');
+  } else {
+    tips.push('💰 预估总花费约 ' + total + ' 元/人（' + (holiday ? '国庆档' : '平日档') + '）。');
+  }
+  tips.push('💡 价格均为国庆档估算，专线/住宿以实际询价为准（专线 13211710192，官方 0836-6966022）。');
+
+  return { rows, total, budget: hasBudget ? budget : null, surplus, tips, hotelRec, holiday, hasBudget, cityKey };
+}
+
+/* 是否国庆档（10 月上中旬） */
+function isHoliday(month) { return Number(month) === 10; }
+
+/* ★ 拍摄机位建议：机位表 × 每日行程 → "第X天在XX营地拍XX" */
+function shotAdvice(sched, input) {
+  const shots = KB.shots || [];
+  const out = [];
+  sched.forEach((d, i) => {
+    const camp = (d.camp || '').replace(/^\d+m\s*/, ''); // 去掉海拔前缀取营地名
+    const hit = shots.find(s => camp.includes(s.camp) || s.camp.includes(camp));
+    if (hit && !out.some(o => o.camp === hit.camp)) {
+      out.push({ day: d.day || 'D' + (i + 1), camp: hit.camp, peak: hit.peak, best: hit.best, tip: hit.tip });
+    }
+  });
+  // 摄影特需优先输出
+  if (input.specialNeed && /摄影|拍照|相机/i.test(input.specialNeed)) {
+    out.forEach(o => { o.tip = '📷 ' + o.tip; });
+  }
+  return out;
+}
+
+/* ★ 生成三套方案（标准/保守/激进）：同一画像，在里程/天数/适应日上错开 */
+function generateVariants(input) {
+  const base = input.days || '7';
+  const exp = input.experience || 'medium';
+  const variants = [];
+  const add = (key, label, days, desc, why) => {
+    variants.push({ key, label, days, desc, why, exp: expAdvLevel(exp) });
+  };
+  if (exp === 'beginner') {
+    add('conservative', '🛡️ 保守版', '8', '8 天完整版 + 2 晚低海拔适应', '你是新手，多留适应日+缩短每日里程，把高反风险压到最低');
+    add('standard', '⭐ 标准版', '7', '7 天标准版 + 1 晚适应', '新手想保留完整观景段，7 天是体能和行程的平衡点');
+    add('aggressive', '🚀 激进版', '5', '5 天压缩版（不推荐新手）', '压缩版对新手体能/高反风险高，仅体能极好者尝试');
+  } else if (exp === 'pro') {
+    add('conservative', '🛡️ 稳妥版', '8', '8 天完整版 + 机动日', '你能力够，多留 1 天机动应对天气/高反');
+    add('standard', '⭐ 标准版', '7', '7 天标准版', '老手常规节奏，观景与效率兼顾');
+    add('aggressive', '🚀 冲刺版', '5', '5 天压缩版', '老手体能可支持 13-16km/日，压缩行程留出机动时间');
+  } else {
+    add('conservative', '🛡️ 保守版', '8', '8 天完整版 + 适应日', '中等经验求稳，多留适应时间更从容');
+    add('standard', '⭐ 标准版', '7', '7 天标准版', '中等经验最适合的标准节奏');
+    add('aggressive', '🚀 激进版', '5', '5 天压缩版', '体能好可压缩，但需控制高反风险');
+  }
+  return variants;
+}
+function expAdvLevel(exp) { return { beginner: 'L1', medium: 'L2', pro: 'L3' }[exp] || 'L2'; }
+
+/* 依据出发地返回交通建议 */
+function transportByFrom(from, opts) {
+  const KB = KB_REF();
+  const opt = opts || {};
+  const arrive = opt.arrive || 'train';
+  const leave = opt.leave || 'van';
+  const pref = opt.pref || 'time';
+
+  const base = (!from || from.trim() === '' || from.includes('郑州'))
+    ? KB.transport
+    : {
+        defaultFrom: from,
+        train: `${from} → 成都（建议提前一天到成都休整，次日 8:00 专线出发）`,
+        van: KB.transport.van,
+        route: KB.transport.route,
+        g227: KB.transport.g227,
+        return: KB.transport.return,
+        planB: KB.transport.planB,
+      };
+
+  // ★ 到达方式差异化
+  let trainLine = base.train;
+  let vanLine = base.van;
+  let returnLine = base.return;
+  const arriveAdvice = [];
+  if (arrive === 'flight') {
+    trainLine = '✈️ 飞机：可飞稻城亚丁机场（4411m 世界最高民用机场，直飞少、多为成都转），或成都天府/双流落地后转专线';
+    vanLine = '🚐 若飞成都：落地后转专线拼车（成都→香格里拉镇约 12h，见下方）';
+    arriveAdvice.push('飞机优点快（成都→稻城 1h），缺点：稻城机场 4411m 直飞高反风险高，票价波动大，且需提前抢');
+    arriveAdvice.push('💡 建议：飞机到达后不要在稻城县城久留，尽快下到香格里拉镇 2900m 适应');
+  } else if (arrive === 'van') {
+    trainLine = '🚐 拼车直达：从「' + (from || '出发地') + '」先到成都，再成都→香格里拉镇专线直达（约 12h，天天发）';
+    arriveAdvice.push('拼车直达不用换乘，但单程 12h 较累；多人结伴可包车更划算');
+  } else {
+    arriveAdvice.push('火车进川稳妥：郑州/各地 → 成都东，D49 硬座过夜早到，省一晚住宿，次日专线出发');
+  }
+
+  // ★ 离开方式差异化
+  if (leave === 'flight') {
+    returnLine = '✈️ 返程可稻城亚丁机场飞成都（需提前预约，出山后从香格里拉镇去机场约 1.5h）';
+  } else {
+    returnLine = '🚐 返程专线：香格里拉镇 → 成都（3:00-13:00 发），或稻城县城转机场';
+  }
+
+  // ★ 时间 vs 性价比
+  const prefAdvice = pref === 'value'
+    ? '⚖️ 性价比优先：火车硬座过夜 + 专线拼车 + 淡季床位，是这条线最省的组合；避开国庆高峰段可再省一半住宿'
+    : '⚡ 时间优先：优先安排「火车夜车 + 专线早班」衔接，减少中转等待；如需极限省时选飞机（稻城机场）';
+
+  return {
+    defaultFrom: base.defaultFrom,
+    train: trainLine,
+    van: vanLine,
+    route: base.route,
+    g227: base.g227,
+    return: returnLine,
+    planB: base.planB,
+    arrive: { mode: arrive, advice: arriveAdvice },
+    leave: { mode: leave, line: returnLine },
+    pref: prefAdvice,
+  };
+}
+
+/* 供 transportByFrom 引用的 KB（避免循环引用问题，直接引用模块级 KB） */
+function KB_REF() { return KB; }
+
+/* 依据人数返回组队/住宿建议 */
+function groupBy(count) {
+  const n = Number(count) || 1;
+  if (n >= 4) return '≥4 人：可考虑包车（7 座）摊薄成本，也更安全；营地可互相照应。';
+  if (n === 2 || n === 3) return '2-3 人：拼车即可；建议至少 2 人以上结伴进山，安全第一。';
+  return '单人：强烈建议加入组队（8264 或抖音组队帖），或报名商业队；单人高海拔重装风险较高。';
+}
+
+/* 依据需求/特殊要求返回补充 */
+function specialByNeed(need) {
+  const out = [];
+  const t = (need || '').toLowerCase();
+  if (need) out.push(`你的特别需求「${need}」已纳入评估，建议出行前针对该项再次核实当地条件。`);
+  if (t.includes('摄影') || t.includes('拍照')) out.push('摄影需求：10 月日照金山概率高，建议带长焦+三脚架；蛇湖晨雾、贡嘎扎则星空机位绝佳。');
+  if (t.includes('轻装')) out.push('轻装：可雇马帮（约 150-400 元/包），或住营地牛棚，减负明显。');
+  if (t.includes('亲子') || t.includes('孩子') || t.includes('儿童')) out.push('亲子：此路线高海拔高强度，不建议带 12 岁以下儿童；如坚持需商业队+向导。');
+  if (t.includes('一个人') || t.includes('独自')) out.push('独自：务必报备家人，进山前留轨迹+行程单，按时打卡报平安。');
+  return out;
+}
+
+/* 生成攻略主体 */
+function buildPlan(input) {
+  const KB = KB_REF();
+  const m = MONTH_MAP[String(input.month || 10).trim()] || 10;
+  const weather = weatherByMonth(m);
+  const { sched, notes } = scheduleByInput(input);
+  const transport = transportByFrom(input.fromCity, input);
+  const groupAdvice = groupBy(input.groupSize);
+  const specials = specialByNeed(input.specialNeed);
+
+  // 装备：根据重装/轻装筛选
+  let gearList = [...KB.gear.userConfirmed];
+  if (input.load === 'light') {
+    gearList = gearList.filter(g => !g.includes('55L') && !g.includes('帐篷') && !g.includes('睡袋') && !g.includes('高压锅'));
+    gearList.unshift('轻装建议：可精简帐篷/炊具，住营地牛棚或雇马帮驮包');
+  }
+  const oct = Number(input.month) === 10;
+  const octGear = oct ? KB.gear.octAdd : ['冰爪', '雪套']; // 非10月也至少提示冰爪雪套
+
+  // ★ 个性化扩展：经验/健康/预算/机位/三套方案
+  const expAdv = experienceAdvice(input.experience);
+  const health = healthAdvice(input.health || {});
+  const budgetEval = evaluateBudget(input);
+  const shots = shotAdvice(sched.days, input);
+  const variants = generateVariants(input);
+  // 个性化理由（"因为你是 X，所以推荐 Y"）
+  const whyList = [];
+  whyList.push(`因为你是「${expAdv.label}」（${expAdv.level}）：${expAdv.days}，${expAdv.pace}。`);
+  if (input.load === 'heavy') whyList.push('因为选择「重装」，所以每日里程按标准下限执行，装备清单为完整重装配置。');
+  if (input.load === 'light') whyList.push('因为选择「轻装」，所以精简了帐篷/炊具/睡袋，可住营地牛棚或雇马帮驮包。');
+  if (input.budget) {
+    const b = budgetEval.hasBudget ? (budgetEval.surplus >= 0 ? '预算内结余 ' + budgetEval.surplus + ' 元' : '超出预算 ' + Math.abs(budgetEval.surplus) + ' 元') : '';
+    whyList.push('因为你的预算是 ' + input.budget + ' 元，' + b + '，住宿/马帮已按预算档推荐。');
+  }
+  if (health.tips.length) whyList.push(health.tips[0]);
+
+  return {
+    meta: { ...KB.meta },
+    summary: {
+      title: `${KB.meta.name} · ${weather.season} · ${sched.name}`,
+      route: KB.meta.route,
+      distance: KB.meta.distance,
+      days: `${input.days} 天${input.load === 'heavy' ? '重装' : '轻装'} · ${input.groupSize || 1} 人 · ${expAdv.label}`,
+      weather: weather.summary,
+      weatherAlert: weather.alert,
+    },
+    schedule: sched.days,
+    scheduleNotes: notes,
+    camps: KB.camps,
+    ticket: KB.ticket,
+    transport,
+    groupAdvice,
+    hotels: KB.hotels,
+    gear: {
+      core: gearList,
+      octAdd: octGear,
+      medicine: KB.gear.medicine,
+      stove: KB.gear.stove,
+      proTips: KB.gear.proTips || [],
+    },
+    risks: KB.risks,
+    safety: KB.safety,
+    teams: KB.teams,
+    specials,
+    pending: KB.pending,
+    generatedAt: new Date().toISOString(),
+    /* ★ 个性化扩展字段 */
+    personalize: {
+      experience: expAdv,
+      healthTips: health.tips,
+      healthForce: health.force,
+      why: whyList,
+      budget: budgetEval,
+      shots: shots,
+      variants: variants,
+    },
+  };
+}
+
+
+
+
+  global.YadingEngine = {
+    KB: KB,
+    buildPlan: buildPlan,
+    weatherByMonth: weatherByMonth,
+    scheduleByInput: scheduleByInput,
+    transportByFrom: transportByFrom,
+    groupBy: groupBy,
+    specialByNeed: specialByNeed,
+    experienceAdvice: experienceAdvice,
+    healthAdvice: healthAdvice,
+    evaluateBudget: evaluateBudget,
+    shotAdvice: shotAdvice,
+    generateVariants: generateVariants,
+  };
+})(window);
