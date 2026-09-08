@@ -1,0 +1,2393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>徒步路线规划平台 - 3D地形 + 天气预报 + KML/GPX</title>
+    <!-- 使用 MapLibre GL JS（开源，无需 API Key） -->
+    <script src="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@4.1.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/@tmcw/togeojson@5.8.0/dist/togeojson.umd.min.js"></script>
+    <!-- 亚丁大转山：浏览器版规则引擎 + 轨迹数据（与 plan-tool Node 版同源，方案A；方案B 保留于 plan-tool/） -->
+    <script src="yading-engine.js"></script>
+    <script src="yd-track-data.js"></script>
+    <script src="plan-module.js"></script>
+    <style>
+        /* ============================================================
+           Apple 液态玻璃设计系统（Liquid Glass · iOS 26 inspired）
+           纯 CSS 实现：毛玻璃面板 + 顶部高光 + 渐变光效 + SF 字体栈
+           ============================================================ */
+        :root {
+            /* 品牌色板（Apple 系） */
+            --brand-blue: #0A84FF;
+            --brand-indigo: #5E5CE6;
+            --brand-cyan: #0A84FF;
+            --brand-purple: #AF52DE;
+            --brand-green: #34C759;
+            --brand-amber: #FF9F0A;
+            --brand-orange: #FF9500;
+            --brand-red: #FF3B30;
+            --brand-pink: #FF2D55;
+            --brand-teal: #30B0C7;
+            --brand-mint: #00C7BE;
+            /* 文字（浅色主题：深色文字） */
+            --txt-hi: rgba(20, 24, 38, 0.96);
+            --txt: rgba(20, 24, 38, 0.8);
+            --txt-mid: rgba(60, 68, 90, 0.68);
+            --txt-low: rgba(60, 68, 90, 0.42);
+            /* 玻璃面板（浅色：半透明白） */
+            --glass-bg: rgba(255, 255, 255, 0.62);
+            --glass-bg-strong: rgba(255, 255, 255, 0.78);
+            --glass-bg-soft: rgba(255, 255, 255, 0.55);
+            --glass-border: rgba(255, 255, 255, 0.7);
+            --glass-border-strong: rgba(255, 255, 255, 0.95);
+            --glass-hairline: rgba(20, 24, 38, 0.08);
+            --glass-highlight: linear-gradient(180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.18) 40%, rgba(255,255,255,0.05));
+            /* 圆角 */
+            --r-lg: 20px;
+            --r-md: 14px;
+            --r-sm: 10px;
+            --r-pill: 999px;
+            /* 阴影（浅色主题：柔和投影） */
+            --shadow-panel: 0 18px 50px -18px rgba(31, 58, 110, 0.28), 0 6px 18px -10px rgba(31, 58, 110, 0.16);
+            --shadow-float: 0 8px 24px -10px rgba(31, 58, 110, 0.25);
+            --shadow-glow-blue: 0 8px 26px -8px rgba(10, 132, 255, 0.45);
+            /* 动效 */
+            --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+            --dur: 0.35s;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body { height: 100%; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+            color: var(--txt-hi);
+            background: #f2f5fb;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+            letter-spacing: 0.01em;
+        }
+
+        /* 背景：浅色清新渐变 + 柔和光晕 */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background:
+                radial-gradient(1100px 700px at 85% -10%, rgba(94, 92, 230, 0.22), transparent 60%),
+                radial-gradient(900px 620px at -10% 15%, rgba(10, 132, 255, 0.18), transparent 55%),
+                radial-gradient(800px 700px at 20% 110%, rgba(175, 82, 222, 0.14), transparent 60%),
+                radial-gradient(600px 500px at 70% 100%, rgba(48, 176, 199, 0.16), transparent 55%),
+                linear-gradient(160deg, #f6f9ff 0%, #eef3fb 45%, #e9effa 100%);
+        }
+        /* 细噪点增加质感 */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0.3;
+            background-image: radial-gradient(rgba(31, 58, 110, 0.05) 1px, transparent 1px);
+            background-size: 3px 3px;
+        }
+
+        /* ---------- 玻璃工具类（伪元素实现顶部高光） ---------- */
+        .glass {
+            position: relative;
+            background: var(--glass-bg);
+            backdrop-filter: blur(24px) saturate(1.6);
+            -webkit-backdrop-filter: blur(24px) saturate(1.6);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--shadow-panel);
+        }
+        .glass::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: var(--glass-highlight);
+            pointer-events: none;
+        }
+
+        /* ---------- Header ---------- */
+        .header {
+            position: relative;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 18px 30px;
+            background: rgba(255, 255, 255, 0.66);
+            backdrop-filter: blur(28px) saturate(1.5);
+            -webkit-backdrop-filter: blur(28px) saturate(1.5);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.65);
+        }
+        .header h1 {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            background: linear-gradient(92deg, #1b2a4a 10%, var(--brand-blue) 55%, var(--brand-indigo) 90%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header p { font-size: 13px; color: var(--txt-mid); font-weight: 400; }
+        .v2-version-badge {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 40px; height: 24px; padding: 0 9px;
+            background: linear-gradient(135deg, #0A84FF, #5E5CE6);
+            color: #fff; font-size: 13px; font-weight: 800; letter-spacing: .5px;
+            border-radius: var(--r-pill, 999px);
+            box-shadow: var(--shadow-glow-blue, 0 8px 26px -8px rgba(10,132,255,.45));
+            position: relative; top: 2px;
+        }
+
+        /* 首页社交账号（抖音/小红书 @少于无） */
+        .social-links {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .social-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 13px;
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            border-radius: var(--r-pill, 999px);
+            color: var(--txt);
+            text-decoration: none;
+            backdrop-filter: blur(18px) saturate(1.4);
+            -webkit-backdrop-filter: blur(18px) saturate(1.4);
+            box-shadow: var(--shadow-float, 0 8px 24px -10px rgba(31,58,110,.25));
+            transition: all var(--dur, .35s) var(--ease, cubic-bezier(.25,.1,.25,1));
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .social-link:hover { transform: translateY(-1px); border-color: rgba(10, 132, 255, 0.5); }
+        .social-ico { width: 18px; height: 18px; flex: 0 0 auto; }
+        .social-name { font-weight: 700; }
+        .social-platform { font-size: 12px; color: var(--txt-mid); font-weight: 500; }
+        @media (max-width: 520px) {
+            .social-links { margin-left: 0; width: 100%; justify-content: flex-start; }
+        }
+
+        /* ---------- 主布局 ---------- */
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 20px;
+            padding: 20px;
+            height: calc(100vh - 72px);
+        }
+
+        /* ---------- 地图区 ---------- */
+        .map-section {
+            position: relative;
+            border-radius: var(--r-lg);
+            overflow: hidden;
+            box-shadow: var(--shadow-panel), 0 0 0 1px rgba(255, 255, 255, 0.6);
+            background: #eef2f9;
+        }
+        .map-container { width: 100%; height: 100%; }
+        #map { width: 100%; height: 100%; }
+
+        .map-overlay {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            z-index: 10;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            max-width: calc(100% - 200px);
+        }
+
+        .style-btn {
+            padding: 9px 15px;
+            background: rgba(255, 255, 255, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            border-radius: var(--r-pill);
+            color: var(--txt);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            backdrop-filter: blur(18px) saturate(1.4);
+            -webkit-backdrop-filter: blur(18px) saturate(1.4);
+            transition: all var(--dur) var(--ease);
+            box-shadow: var(--shadow-float);
+        }
+        .style-btn:hover {
+            background: rgba(255, 255, 255, 0.95);
+            border-color: rgba(10, 132, 255, 0.45);
+            transform: translateY(-1px);
+        }
+        .style-btn.active {
+            background: linear-gradient(135deg, rgba(10, 132, 255, 0.95), rgba(94, 92, 230, 0.95));
+            border-color: rgba(255, 255, 255, 0.6);
+            color: #fff;
+            box-shadow: var(--shadow-glow-blue);
+        }
+        /* 导入轨迹按钮（翠绿色描边） */
+        .import-btn {
+            background: rgba(52, 199, 89, 0.16);
+            border-color: rgba(52, 199, 89, 0.5);
+            color: #1f7a3d;
+        }
+        .import-btn:hover {
+            background: rgba(52, 199, 89, 0.28);
+            border-color: rgba(52, 199, 89, 0.75);
+            color: #0f5c2b;
+        }
+
+        /* 3D / 2D 视角切换（分组胶囊，贴合 style-btn 风格） */
+        .view-switch {
+            display: inline-flex;
+            gap: 2px;
+            padding: 3px;
+            background: rgba(255, 255, 255, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            border-radius: var(--r-pill);
+            backdrop-filter: blur(18px) saturate(1.4);
+            -webkit-backdrop-filter: blur(18px) saturate(1.4);
+            box-shadow: var(--shadow-float);
+        }
+        .view-switch .vsw-btn {
+            padding: 6px 13px;
+            background: transparent;
+            border: none;
+            border-radius: calc(var(--r-pill) - 3px);
+            color: var(--txt);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all var(--dur) var(--ease);
+            white-space: nowrap;
+        }
+        .view-switch .vsw-btn:hover { background: rgba(10, 132, 255, 0.1); }
+        .view-switch .vsw-btn.on {
+            background: linear-gradient(135deg, rgba(10, 132, 255, 0.95), rgba(94, 92, 230, 0.95));
+            color: #fff;
+            box-shadow: var(--shadow-glow-blue);
+        }
+
+        /* 地图右上角悬浮天气卡片（液态玻璃） */
+        .map-weather {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            z-index: 10;
+            min-width: 172px;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.85);
+            border-radius: var(--r-md);
+            padding: 12px 14px;
+            color: var(--txt-hi);
+            backdrop-filter: blur(22px) saturate(1.6);
+            -webkit-backdrop-filter: blur(22px) saturate(1.6);
+            box-shadow: var(--shadow-float);
+            font-family: inherit;
+            cursor: pointer;
+            user-select: none;
+            transition: all var(--dur) var(--ease);
+        }
+        .map-weather::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: var(--glass-highlight);
+            pointer-events: none;
+        }
+        .map-weather:hover { border-color: var(--glass-border-strong); }
+        .map-weather .mw-head {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--txt-hi);
+        }
+        .map-weather .mw-head .mw-toggle {
+            margin-left: auto;
+            font-size: 10px;
+            color: var(--txt-mid);
+            transition: transform 0.3s;
+        }
+        .map-weather.collapsed .mw-toggle { transform: rotate(-90deg); }
+        .map-weather .mw-body {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+        }
+        .map-weather .mw-icon { font-size: 30px; line-height: 1; filter: drop-shadow(0 2px 6px rgba(31,58,110,0.2)); }
+        .map-weather .mw-temp {
+            font-size: 32px;
+            font-weight: 700;
+            line-height: 1;
+            background: linear-gradient(135deg, #1b2a4a 0%, var(--brand-blue) 55%, var(--brand-indigo) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .map-weather .mw-temp sup { font-size: 13px; -webkit-text-fill-color: var(--txt-mid); }
+        .map-weather .mw-meta {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            font-size: 11px;
+            color: var(--txt);
+            line-height: 1.4;
+        }
+        .map-weather .mw-meta b { color: var(--txt-hi); font-weight: 600; }
+        .map-weather .mw-src {
+            position: relative;
+            margin-top: 7px;
+            font-size: 10px;
+            color: var(--txt-mid);
+            border-top: 1px solid var(--glass-hairline);
+            padding-top: 6px;
+        }
+        .map-weather .mw-src span { color: var(--brand-blue); }
+        /* 折叠态：只留一行标题 */
+        .map-weather.collapsed { min-width: 150px; padding: 8px 12px; }
+        .map-weather.collapsed .mw-body,
+        .map-weather.collapsed .mw-src { display: none; }
+        .map-weather.collapsed .mw-head::after {
+            content: '🌤️ 点开查看';
+            font-size: 10px;
+            opacity: 0.65;
+            margin-left: 4px;
+        }
+
+        /* ---------- 侧栏 ---------- */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;
+            padding-right: 4px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(31, 58, 110, 0.22) transparent;
+        }
+        .sidebar::-webkit-scrollbar { width: 8px; }
+        .sidebar::-webkit-scrollbar-thumb { background: rgba(31, 58, 110, 0.2); border-radius: 8px; }
+
+        /* 玻璃面板 */
+        .panel {
+            position: relative;
+            background: var(--glass-bg);
+            backdrop-filter: blur(24px) saturate(1.6);
+            -webkit-backdrop-filter: blur(24px) saturate(1.6);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--r-lg);
+            padding: 20px;
+            box-shadow: var(--shadow-panel);
+        }
+        .panel::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: var(--glass-highlight);
+            pointer-events: none;
+        }
+        .panel > * { position: relative; }
+
+        .panel-title {
+            font-size: 15px;
+            font-weight: 650;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--txt-hi);
+            letter-spacing: -0.01em;
+        }
+
+        /* 状态条 */
+        .status {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            padding: 11px 15px;
+            background: var(--glass-bg-soft);
+            border: 1px solid var(--glass-hairline);
+            border-radius: var(--r-md);
+            font-size: 12px;
+            color: var(--txt);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--brand-green);
+            border-radius: 50%;
+            box-shadow: 0 0 0 3px rgba(48, 209, 88, 0.18), 0 0 10px rgba(48, 209, 88, 0.6);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+        /* 上传区 */
+        .upload-zone {
+            border: 1.5px dashed rgba(10, 132, 255, 0.5);
+            border-radius: var(--r-md);
+            padding: 22px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--dur) var(--ease);
+            background: rgba(10, 132, 255, 0.04);
+        }
+        .upload-zone:hover { border-color: var(--brand-blue); background: rgba(10, 132, 255, 0.09); transform: translateY(-1px); }
+        .upload-zone.dragover { border-color: var(--brand-blue); background: rgba(10, 132, 255, 0.13); }
+        .upload-icon { font-size: 34px; margin-bottom: 8px; filter: drop-shadow(0 4px 12px rgba(10,132,255,0.3)); }
+        .upload-text { font-size: 14px; color: var(--txt-hi); font-weight: 500; }
+        .upload-formats { font-size: 12px; color: var(--txt-mid); margin-top: 6px; }
+
+        .file-input { display: none; }
+
+        .route-list { margin-top: 14px; max-height: 150px; overflow-y: auto; }
+
+        /* 轨迹附件面板 */
+        .attach-panel { position: relative; }
+        .attach-head {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; font-weight: 650; color: var(--txt-hi); margin-bottom: 10px;
+        }
+        .attach-count {
+            background: linear-gradient(135deg, var(--brand-blue), var(--brand-indigo));
+            color: #fff; font-size: 11px; font-weight: 700;
+            padding: 1px 9px; border-radius: var(--r-pill); letter-spacing: .3px;
+        }
+        .attach-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+            max-height: 240px; overflow-y: auto;
+        }
+        .attach-item {
+            position: relative; border-radius: var(--r-sm); overflow: hidden;
+            aspect-ratio: 1; background: rgba(10,132,255,.06);
+            border: 1px solid var(--glass-hairline); cursor: zoom-in;
+            transition: all .22s var(--ease);
+        }
+        .attach-item:hover { transform: translateY(-2px); box-shadow: var(--shadow-float); border-color: var(--brand-blue); }
+        .attach-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .attach-item .video-badge {
+            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            background: rgba(20,24,38,.28); color: #fff; font-size: 26px; pointer-events: none;
+        }
+        .attach-item .ext-badge {
+            position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+            background: linear-gradient(135deg, rgba(10,132,255,.85), rgba(94,92,230,.85));
+            color: #fff; font-size: 12px; font-weight: 700; text-align: center; padding: 6px; pointer-events: none;
+        }
+        .attach-item .ext-badge .lbl { font-size: 10px; opacity: .85; font-weight: 500; }
+        .attach-item .att-note {
+            position: absolute; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(transparent, rgba(20,24,38,.72));
+            color: #fff; font-size: 10px; padding: 12px 6px 4px; line-height: 1.3;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+        }
+        .attach-empty { font-size: 11.5px; color: var(--txt-mid); background: var(--glass-bg-soft); border: 1px dashed var(--glass-hairline); border-radius: var(--r-sm); padding: 10px 12px; }
+
+        /* Lightbox 全屏查看 */
+        .lightbox {
+            position: fixed; inset: 0; z-index: 9990;
+            background: rgba(16, 22, 38, 0.92);
+            backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            display: none; align-items: center; justify-content: center; flex-direction: column;
+            padding: 30px; cursor: zoom-out;
+        }
+        .lightbox.show { display: flex; animation: fadeSlide .3s var(--ease); }
+        .lightbox img, .lightbox video { max-width: 92vw; max-height: 82vh; border-radius: var(--r-md); box-shadow: 0 24px 70px -20px rgba(0,0,0,.7); cursor: default; }
+        .lightbox .lb-title { color: rgba(255,255,255,.85); font-size: 13px; margin-top: 14px; max-width: 80vw; text-align: center; }
+        .lightbox .lb-sub { color: rgba(255,255,255,.5); font-size: 12px; margin-top: 5px; }
+        .lightbox .lb-open { margin-top: 10px; padding: 8px 18px; background: linear-gradient(135deg,#0A84FF,#5E5CE6); color:#fff; border:none; border-radius: var(--r-pill); font-size: 13px; cursor: pointer; font-family: inherit; }
+        .lightbox .lb-close {
+            position: absolute; top: 20px; right: 22px; width: 38px; height: 38px; border-radius: 50%;
+            background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); color: #fff;
+            font-size: 19px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all .2s;
+        }
+        .lightbox .lb-close:hover { background: rgba(255,255,255,.28); }
+        .lightbox .lb-nav {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+            background: rgba(255,255,255,.14); color: #fff; font-size: 20px;
+            display: flex; align-items: center; justify-content: center; transition: all .2s;
+        }
+        .lightbox .lb-nav:hover { background: rgba(255,255,255,.3); }
+        .lightbox .lb-prev { left: 16px; }
+        .lightbox .lb-next { right: 16px; }
+        .route-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 11px 12px;
+            background: var(--glass-bg-soft);
+            border: 1px solid var(--glass-hairline);
+            border-radius: var(--r-sm);
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        .route-item .name { font-weight: 500; color: var(--txt-hi); }
+        .route-item .info { color: var(--txt-mid); font-size: 11px; }
+        .route-item .del {
+            background: rgba(255, 69, 58, 0.85);
+            border: none;
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: var(--r-sm);
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+        .route-item .del:hover { background: var(--brand-red); }
+
+        /* 天气网格 */
+        .weather-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .weather-item {
+            background: var(--glass-bg-soft);
+            border: 1px solid var(--glass-hairline);
+            padding: 13px;
+            border-radius: var(--r-sm);
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .weather-item:hover { background: rgba(10, 132, 255, 0.06); }
+        .weather-item .label { font-size: 11px; color: var(--txt-mid); margin-bottom: 4px; }
+        .weather-item .value {
+            font-size: 23px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #1b2a4a, var(--brand-blue));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .weather-item .unit { font-size: 11px; color: var(--txt-mid); }
+
+        /* 统计 */
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .stat-box {
+            background: var(--glass-bg-soft);
+            border: 1px solid var(--glass-hairline);
+            padding: 12px;
+            border-radius: var(--r-sm);
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .stat-box:hover { background: rgba(10, 132, 255, 0.06); }
+        .stat-box .num {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--brand-cyan), var(--brand-blue));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .stat-box .label { font-size: 11px; color: var(--txt-mid); }
+
+        .risk-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 13px;
+            background: var(--glass-bg-soft);
+            border: 1px solid var(--glass-hairline);
+            border-radius: var(--r-sm);
+            margin-top: 10px;
+            font-size: 13px;
+            color: var(--txt);
+        }
+        .risk-level { padding: 4px 13px; border-radius: var(--r-pill); font-size: 12px; font-weight: 700; color: #04140a; }
+        .risk-low { background: var(--brand-green); box-shadow: 0 4px 14px -4px rgba(48,209,88,0.6); }
+        .risk-medium { background: var(--brand-amber); box-shadow: 0 4px 14px -4px rgba(255,214,10,0.5); }
+        .risk-high { background: var(--brand-red); color: #fff; box-shadow: 0 4px 14px -4px rgba(255,69,58,0.6); }
+
+        .elevation-chart {
+            background: var(--glass-bg-soft);
+            border: 1px solid var(--glass-hairline);
+            border-radius: var(--r-sm);
+            padding: 14px;
+            margin-top: 10px;
+        }
+        .elevation-chart h4 { font-size: 12px; margin-bottom: 10px; color: var(--txt-mid); font-weight: 500; }
+        #elevationCanvas { width: 100%; height: 80px; }
+
+        .windy-embed {
+            width: 100%;
+            height: 380px;
+            border: none;
+            border-radius: var(--r-sm);
+            margin-top: 12px;
+            box-shadow: 0 8px 24px -12px rgba(0,0,0,0.6);
+        }
+
+        /* 刷新按钮（行内样式被类覆盖，补一条类规则兜底） */
+        .wx-source { font-size: 11px; color: var(--txt-mid); margin-top: 6px; }
+        .wx-refresh {
+            width: 100%;
+            margin-top: 10px;
+            padding: 9px;
+            background: rgba(255, 255, 255, 0.55);
+            border: 1px solid rgba(31, 58, 110, 0.16);
+            border-radius: var(--r-sm);
+            color: var(--txt);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .wx-refresh:hover { background: rgba(10,132,255,0.08); border-color: var(--brand-blue); color: var(--txt-hi); }
+
+        /* ============ 攻略生成器 ============ */
+        .plan-tool-head { display: flex; justify-content: space-between; align-items: center; }
+        .plan-open-btn {
+            background: linear-gradient(135deg, var(--brand-blue), var(--brand-indigo));
+            border: none;
+            color: #fff;
+            padding: 6px 15px;
+            border-radius: var(--r-pill);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all var(--dur) var(--ease);
+            box-shadow: var(--shadow-glow-blue);
+        }
+        .plan-open-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 30px -8px rgba(10,132,255,0.7); }
+        .plan-form { display: none; margin-top: 14px; }
+        .plan-form.open { display: block; animation: fadeSlide 0.4s var(--ease); }
+        @keyframes fadeSlide { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+        .seg-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+        .seg-label { width: 100%; font-size: 12px; color: var(--txt-mid); margin-bottom: 2px; font-weight: 500; }
+        .seg-btn {
+            flex: 1;
+            min-width: 60px;
+            padding: 8px 6px;
+            background: var(--glass-bg-soft);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--r-sm);
+            color: var(--txt);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.22s var(--ease);
+        }
+        .seg-btn:hover { border-color: var(--brand-blue); color: var(--txt-hi); transform: translateY(-1px); }
+        .seg-btn.on {
+            background: linear-gradient(135deg, rgba(10,132,255,0.9), rgba(94,92,230,0.9));
+            border-color: transparent;
+            color: #fff;
+            font-weight: 650;
+            box-shadow: 0 4px 14px -4px rgba(10,132,255,0.55);
+        }
+
+        /* 车次/酒店 可选项列表（单选胶囊） */
+        .pick-options { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+        .pick-item {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(31, 58, 110, 0.14);
+            border-radius: var(--r-sm);
+            color: var(--txt-hi);
+            cursor: pointer;
+            font-size: 12.5px;
+            line-height: 1.55;
+            transition: all 0.22s var(--ease);
+            font-family: inherit;
+        }
+        .pick-item:hover { border-color: rgba(10,132,255,0.5); transform: translateY(-1px); }
+        .pick-item.sel {
+            border-color: transparent;
+            background: linear-gradient(135deg, rgba(10,132,255,0.92), rgba(94,92,230,0.92));
+            color: #fff;
+            box-shadow: 0 5px 16px -5px rgba(10,132,255,0.6);
+        }
+        .pick-item .p-title { font-weight: 700; font-size: 13px; }
+        .pick-item .p-sub { opacity: 0.85; font-size: 12px; }
+        .pick-item.sel .p-sub { opacity: 0.95; }
+        .pick-item .p-meta { margin-top: 4px; font-size: 11.5px; opacity: 0.72; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+        .pick-item.sel .p-meta { opacity: 0.92; }
+        .pick-item .p-note { font-size: 11px; opacity: 0.6; margin-top: 3px; }
+        .pick-item .p-tel { font-weight: 700; color: inherit; }
+
+        .plan-input {
+            width: 100%;
+            padding: 11px 13px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(31, 58, 110, 0.16);
+            border-radius: var(--r-sm);
+            color: var(--txt-hi);
+            font-size: 13px;
+            margin-bottom: 10px;
+            outline: none;
+            transition: all 0.25s;
+            font-family: inherit;
+        }
+        .plan-input:focus { border-color: var(--brand-blue); background: #fff; box-shadow: 0 0 0 3px rgba(10,132,255,0.15); }
+        .plan-input::placeholder { color: var(--txt-low); }
+        textarea.plan-input { resize: vertical; min-height: 56px; }
+
+        .plan-gen-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-indigo) 100%);
+            border: none;
+            border-radius: var(--r-md);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            transition: all var(--dur) var(--ease);
+            box-shadow: var(--shadow-glow-blue);
+        }
+        .plan-gen-btn:hover { transform: translateY(-2px); box-shadow: 0 14px 36px -8px rgba(10,132,255,0.7); }
+        .plan-gen-btn:active { transform: translateY(0); }
+        .plan-gen-btn:disabled { opacity: 0.55; cursor: wait; transform: none; box-shadow: none; }
+
+        /* 攻略结果 */
+        .plan-result { display: none; margin-top: 6px; }
+        .plan-result.open { display: block; animation: fadeSlide 0.4s var(--ease); }
+        .r-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--txt-hi);
+            margin: 20px 0 8px;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding-bottom: 7px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .r-title .ico { font-size: 16px; }
+        .r-sub { font-size: 12px; color: var(--txt-mid); margin: 8px 0 6px; font-weight: 650; }
+
+        /* 个性化引擎：三套方案 + 预算 + 机位 */
+        .variant-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+        .variant-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--r-md);
+            padding: 11px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            transition: all .25s var(--ease);
+        }
+        .variant-card:hover { transform: translateY(-3px); border-color: rgba(10,132,255,0.5); }
+        .variant-card.rec { border-color: rgba(10,132,255,0.55); background: linear-gradient(160deg, rgba(10,132,255,0.14), rgba(94,92,230,0.08)); }
+        .v-label { font-weight: 700; font-size: 13px; color: var(--txt-hi); }
+        .v-days { font-size: 20px; font-weight: 800; color: var(--acc); }
+        .v-desc { font-size: 12px; color: var(--txt); line-height: 1.45; }
+        .v-why { font-size: 11px; color: var(--txt-mid); line-height: 1.4; border-top: 1px dashed var(--glass-border); padding-top: 6px; }
+        .budget-head { font-size: 15px; font-weight: 700; margin: 10px 0 8px; color: var(--txt-hi); }
+        .budget-head b { color: var(--acc); font-size: 19px; }
+        /* 预算驱动酒店推荐卡片 */
+        .hotel-rec-box { margin: 10px 0 4px; padding: 12px 14px; border-radius: var(--r-md); border: 1px solid rgba(10,132,255,0.35); background: linear-gradient(160deg, rgba(10,132,255,0.12), rgba(94,92,230,0.06)); }
+        .hotel-rec-box .hr-head { font-size: 13.5px; font-weight: 700; color: var(--txt-hi); margin-bottom: 6px; }
+        .hotel-rec-box .hr-head b { color: var(--acc); }
+        .hotel-rec-box .hr-ref, .hotel-rec-box .hr-dist, .hotel-rec-box .hr-note, .hotel-rec-box .hr-tel { font-size: 12px; line-height: 1.6; color: var(--txt-hi); }
+        .hotel-rec-box .hr-ref { color: var(--acc); font-weight: 600; }
+        .hotel-rec-box .hr-note, .hotel-rec-box .hr-dist { color: var(--txt-mid); }
+        .hotel-rec-box .hr-tel { margin-top: 2px; }
+        .hotel-rec-box .hr-warn { margin-top: 6px; font-size: 12px; color: #f59e0b; }
+        .hotel-rec-box .hr-alt { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--glass-border); font-size: 12px; color: var(--txt-mid); }
+        .hotel-rec-box .hr-alt-title { font-weight: 600; color: var(--txt-hi); margin-bottom: 3px; }
+        .hotel-rec-box .hr-alt-item { line-height: 1.7; }
+        .g-item.good { border-left-color: #22c55e; }
+        @media (max-width: 520px) { .variant-row { grid-template-columns: 1fr; } }
+
+        .summary-card {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(135deg, rgba(10,132,255,0.1), rgba(94,92,230,0.08));
+            border: 1px solid rgba(10,132,255,0.28);
+            border-radius: var(--r-md);
+            padding: 15px;
+            margin-top: 10px;
+        }
+        .summary-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(10,132,255,0.45), transparent);
+        }
+        .summary-card h2 { font-size: 16px; margin-bottom: 6px; line-height: 1.4; color: var(--txt-hi); }
+        .summary-card .route { font-size: 12px; color: var(--txt); margin-bottom: 8px; }
+        .summary-card .kv { display: flex; flex-wrap: wrap; gap: 6px; }
+        .summary-card .kv span {
+            background: rgba(10,132,255,0.1);
+            border: 1px solid rgba(10,132,255,0.26);
+            padding: 3px 9px;
+            border-radius: var(--r-pill);
+            font-size: 11px;
+            color: var(--txt-hi);
+        }
+
+        .weather-box, .alert-box {
+            margin-top: 10px;
+            font-size: 12px;
+            padding: 10px 12px;
+            border-radius: var(--r-sm);
+            line-height: 1.6;
+            border: 1px solid;
+        }
+        .weather-box { background: rgba(48, 176, 199, 0.1); color: #0d6b7d; border-color: rgba(48,176,199,0.3); }
+        .alert-box { background: rgba(255, 149, 0, 0.1); color: #9a5b00; border-color: rgba(255,149,0,0.3); }
+
+        /* 区间天气数据分析 */
+        .period-stats {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .p-stat {
+            background: var(--glass-bg-soft);
+            border: 1px solid var(--glass-hairline);
+            border-radius: var(--r-sm);
+            padding: 9px 6px;
+            text-align: center;
+        }
+        .p-ico { font-size: 16px; line-height: 1; margin-bottom: 5px; }
+        .p-val { font-size: 15px; font-weight: 700; color: var(--txt-hi); line-height: 1.2; }
+        .p-label { font-size: 10px; color: var(--txt-mid); margin-top: 3px; }
+        @media (max-width: 560px) { .period-stats { grid-template-columns: repeat(3, 1fr); } }
+
+        .sched-item {
+            position: relative;
+            background: var(--glass-bg-soft);
+            border: 1px solid var(--glass-hairline);
+            border-radius: var(--r-sm);
+            padding: 12px 13px;
+            margin-bottom: 9px;
+            border-left: 3px solid var(--brand-blue);
+            transition: all 0.3s;
+        }
+        .sched-item:hover { background: rgba(10, 132, 255, 0.06); transform: translateX(2px); }
+        .sched-top { display: flex; gap: 8px; align-items: baseline; }
+        .sched-day {
+            background: linear-gradient(135deg, var(--brand-blue), var(--brand-indigo));
+            border-radius: 6px;
+            padding: 2px 9px;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+            color: #fff;
+        }
+        .sched-route { font-size: 13px; font-weight: 600; color: var(--txt-hi); }
+        .sched-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; font-size: 12px; color: var(--txt); }
+        .sched-meta b { color: var(--txt-hi); }
+        .sched-note { font-size: 12px; color: var(--txt-mid); margin-top: 6px; }
+        .sched-wx { display: flex; align-items: center; gap: 6px; margin-top: 7px; font-size: 12px; flex-wrap: wrap; }
+        .sched-wx .wx-tag {
+            background: rgba(48, 176, 199, 0.14);
+            color: #0d6b7d;
+            padding: 2px 9px;
+            border-radius: 6px;
+            border: 1px solid rgba(48,176,199,0.3);
+        }
+        .sched-wx .wx-note { color: var(--txt-mid); font-size: 11px; }
+
+        .g-list { display: flex; flex-direction: column; gap: 7px; }
+        .g-item {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            background: var(--glass-bg-soft);
+            border: 1px solid var(--glass-hairline);
+            padding: 9px 12px;
+            border-radius: var(--r-sm);
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--txt);
+        }
+        .g-item .dot { flex-shrink: 0; }
+        .g-item.warn { border-left: 3px solid var(--brand-amber); }
+        .g-item.gold { border-left: 3px solid var(--brand-amber); background: rgba(255, 159, 10, 0.08); }
+
+        .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+        .tag {
+            background: rgba(10, 132, 255, 0.1);
+            border: 1px solid rgba(10, 132, 255, 0.3);
+            padding: 4px 10px;
+            border-radius: var(--r-pill);
+            font-size: 11px;
+            color: #0a5fbe;
+        }
+
+        .callout {
+            background: rgba(255, 159, 10, 0.09);
+            border-left: 3px solid var(--brand-amber);
+            padding: 9px 12px;
+            border-radius: var(--r-sm);
+            font-size: 12px;
+            margin-top: 8px;
+            color: var(--txt);
+        }
+        .pending {
+            background: rgba(255, 59, 48, 0.08);
+            border-left: 3px solid var(--brand-red);
+            padding: 11px 13px;
+            border-radius: var(--r-sm);
+            font-size: 12px;
+            color: #b02a23;
+            margin-top: 14px;
+            line-height: 1.6;
+        }
+
+        .copy-btn {
+            width: 100%;
+            margin-top: 16px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(31, 58, 110, 0.16);
+            border-radius: var(--r-sm);
+            color: var(--txt-hi);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .copy-btn:hover { background: rgba(10,132,255,0.1); border-color: var(--brand-blue); }
+
+        /* 逐日交通+徒步拆分 */
+        .day-split {
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(31, 58, 110, 0.1);
+            border-radius: var(--r-sm);
+            padding: 8px 10px;
+            margin: 7px 0 4px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            color: var(--txt);
+        }
+        .day-split .tag2 { background: rgba(10,132,255,0.12); padding: 2px 8px; border-radius: 6px; font-size: 11px; color: #0a5fbe; }
+        .day-split .tag2.trail { background: rgba(52, 199, 89, 0.14); color: #1f7a3d; }
+        .day-split .tag2.travel { background: rgba(255, 149, 0, 0.14); color: #9a5b00; }
+
+        /* 按天高亮 */
+        .day-picker { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+        .day-chip {
+            padding: 5px 11px;
+            background: var(--glass-bg-soft);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--r-pill);
+            color: var(--txt);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.22s var(--ease);
+        }
+        .day-chip:hover { border-color: var(--brand-cyan); color: var(--txt-hi); transform: translateY(-1px); }
+        .day-chip.on {
+            background: linear-gradient(135deg, var(--brand-blue), var(--brand-indigo));
+            color: #fff;
+            border-color: transparent;
+            box-shadow: 0 4px 14px -4px rgba(10,132,255,0.5);
+        }
+        .day-chip.all { border-style: dashed; }
+
+        .marker-popup { padding: 10px; max-width: 200px; }
+        .marker-popup h4 { margin-bottom: 5px; color: var(--brand-blue); }
+        .marker-popup p { font-size: 12px; color: var(--txt-mid); }
+
+        /* ---------- MapLibre 样式覆盖（液态玻璃·浅色） ---------- */
+        .maplibregl-popup-content {
+            background: rgba(255, 255, 255, 0.9) !important;
+            color: var(--txt-hi) !important;
+            border-radius: var(--r-md) !important;
+            padding: 15px !important;
+            box-shadow: var(--shadow-panel) !important;
+            backdrop-filter: blur(20px) saturate(1.5) !important;
+            -webkit-backdrop-filter: blur(20px) saturate(1.5) !important;
+            border: 1px solid rgba(255, 255, 255, 0.9) !important;
+            font-family: inherit !important;
+        }
+        .maplibregl-popup-tip { border-top-color: rgba(255, 255, 255, 0.9) !important; }
+        .maplibregl-popup-close-button { color: var(--txt) !important; font-size: 20px; }
+        .maplibregl-ctrl-group {
+            background: rgba(255, 255, 255, 0.82) !important;
+            border-radius: var(--r-sm) !important;
+            border: 1px solid rgba(255, 255, 255, 0.9) !important;
+            box-shadow: var(--shadow-float) !important;
+            backdrop-filter: blur(16px) saturate(1.4) !important;
+            -webkit-backdrop-filter: blur(16px) saturate(1.4) !important;
+            overflow: hidden;
+        }
+        .maplibregl-ctrl-group button {
+            background: rgba(255, 255, 255, 0) !important;
+            border-color: rgba(31, 58, 110, 0.1) !important;
+        }
+        .maplibregl-ctrl-group button:hover { background: rgba(10, 132, 255, 0.12) !important; }
+        .maplibregl-ctrl-group button span { filter: none; }
+        .maplibregl-ctrl-scale {
+            background: rgba(255, 255, 255, 0.82) !important;
+            border-color: rgba(10, 132, 255, 0.5) !important;
+            color: var(--txt) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            border-radius: 6px !important;
+            padding: 2px 6px !important;
+            font-family: inherit !important;
+        }
+
+        /* 响应式：窄屏时侧栏收窄 */
+        @media (max-width: 900px) {
+            .main-container { grid-template-columns: 1fr; height: auto; overflow-y: auto; }
+            body { overflow: auto; }
+            .map-section { height: 55vh; min-height: 360px; }
+            .header { padding: 14px 18px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <h1>🥾 徒步路线规划平台</h1>
+            <span class="v2-version-badge">V2</span>
+            <p style="flex-basis:100%">3D 地形 + KML/GPX 轨迹 + Windy 天气</p>
+        </div>
+        <!-- 社交账号（需求：首页展示抖音/小红书 @少于无 + 平台图标） -->
+        <div class="social-links">
+            <a class="social-link" href="https://www.douyin.com/search/%E5%B0%91%E4%BA%8E%E6%97%A0" target="_blank" rel="noopener" title="抖音搜索 @少于无">
+                <svg class="social-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5c.6 0 1.1.1 1.6.2.2.9.9 1.6 1.8 1.8-.2 1.6-1.5 2.8-3.1 2.9v1.2c.5 0 .9 0 1.4-.1v4.2c0 2.7-2.2 4.9-4.9 4.9s-4.9-2.2-4.9-4.9 2.2-4.9 4.9-4.9c.3 0 .6 0 .9.1v2.9c-.3-.1-.6-.2-.9-.2-1.2 0-2.1.9-2.1 2.1s.9 2.1 2.1 2.1 2.1-.9 2.1-2.1V2.5z"/></svg>
+                <span class="social-name">少于无</span>
+                <span class="social-platform">抖音</span>
+            </a>
+            <a class="social-link" href="https://www.xiaohongshu.com/search_result?keyword=%E5%B0%91%E4%BA%8E%E6%97%A0" target="_blank" rel="noopener" title="小红书搜索 @少于无">
+                <svg class="social-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3.5c1 1.6 2 2.4 3.4 2.7l1.6.2c.6.1 1 .6.9 1.2l-.2 1.6c-.2 1.4.6 2.4 2.2 3l1.3.5c.6.2.9.8.7 1.4l-.6 1.5c-.6 1.4-.6 2.6 0 4l.6 1.5c.2.6 0 1.2-.7 1.4l-1.3.5c-1.6.6-2.4 1.6-2.2 3l.2 1.6c.1.6-.3 1.1-.9 1.2l-1.6.2c-1.4.3-2.4 1.1-3.4 2.7-1-1.6-2-2.4-3.4-2.7l-1.6-.2c-.6-.1-1-.6-.9-1.2l.2-1.6c.2-1.4-.6-2.4-2.2-3l-1.3-.5c-.6-.2-.9-.8-.7-1.4l.6-1.5c.6-1.4.6-2.6 0-4l-.6-1.5c-.2-.6 0-1.2.7-1.4l1.3-.5c1.6-.6 2.4-1.6 2.2-3l-.2-1.6c-.1-.6.3-1.1.9-1.2l1.6-.2C10 5.9 11 5.1 12 3.5z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span class="social-name">少于无</span>
+                <span class="social-platform">小红书</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="map-section">
+            <div class="map-overlay">
+                <button class="style-btn" onclick="setMapStyle('outdoor')">🏔️ 地形图</button>
+                <button class="style-btn active" onclick="setMapStyle('satellite')">🛰️ 卫星图</button>
+                <button class="style-btn" onclick="setMapStyle('street')">🗺️ 街道图</button>
+                <button class="style-btn import-btn" onclick="openImport()">📤 导入轨迹</button>
+                <span class="view-switch" id="viewSwitch" title="切换 3D 立体 / 2D 平面视角">
+                    <button class="vsw-btn on" data-v="3d" onclick="setViewMode('3d', this)">⛰️ 3D</button>
+                    <button class="vsw-btn" data-v="2d" onclick="setViewMode('2d', this)">🗺️ 2D</button>
+                </span>
+            </div>
+            <div class="map-weather" id="mapWeather" onclick="toggleMapWeather()" title="点击折叠/展开">
+                <div class="mw-head">
+                    <span>📍 稻城亚丁游客中心</span>
+                    <span class="mw-toggle">▾</span>
+                </div>
+                <div class="mw-body">
+                    <div class="mw-icon" id="mwIcon">⏳</div>
+                    <div class="mw-temp" id="mwTemp">--<sup>°C</sup></div>
+                    <div class="mw-meta">
+                        <span>💧 湿度 <b id="mwHumidity">--</b>%</span>
+                        <span>💨 风速 <b id="mwWind">--</b> km/h</span>
+                    </div>
+                </div>
+                <div class="mw-src">🌤️ 实况 · <span id="mwSource">加载中…</span></div>
+            </div>
+            <div class="map-container">
+                <div id="map"></div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="status">
+                <div class="status-dot"></div>
+                <span>MapLibre 3D 地形 + KML/GPX 已就绪（无需 API Key）</span>
+            </div>
+
+            <!-- 攻略生成器（融合入口） -->
+            <div class="panel" id="planPanel">
+                <div class="plan-tool-head">
+                    <div class="panel-title" style="margin:0">✨ 亚丁大转山攻略生成器</div>
+                    <button class="plan-open-btn" id="planToggleBtn" onclick="togglePlanForm()">展开 ▾</button>
+                </div>
+                <div class="plan-form" id="planForm">
+                    <div class="seg-row">
+                        <div class="seg-label">行程天数</div>
+                        <button class="seg-btn" data-v="5" onclick="setSeg('days',this)">5天·压缩</button>
+                        <button class="seg-btn on" data-v="7" onclick="setSeg('days',this)">7天·标准</button>
+                        <button class="seg-btn" data-v="8" onclick="setSeg('days',this)">8天·完整</button>
+                    </div>
+                    <div class="seg-row">
+                        <div class="seg-label">出发日期（精确到日）</div>
+                        <input type="date" class="plan-input" id="planDate" value="" style="margin-bottom:6px">
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;width:100%">
+                            <button class="seg-btn" data-v="9" onclick="setSeg('month',this)">9月</button>
+                            <button class="seg-btn on" data-v="10" onclick="setSeg('month',this)">10月</button>
+                            <button class="seg-btn" data-v="11" onclick="setSeg('month',this)">11月</button>
+                        </div>
+                        <div style="font-size:11px;color:var(--txt-mid);margin-top:2px" id="planDateHint">🎯 可选具体日期，攻略将按所选区间做天气数据分析</div>
+                    </div>
+                    <div class="seg-row">
+                        <div class="seg-label">经验</div>
+                        <button class="seg-btn" data-v="beginner" onclick="setSeg('exp',this)">新手</button>
+                        <button class="seg-btn on" data-v="medium" onclick="setSeg('exp',this)">中等</button>
+                        <button class="seg-btn" data-v="pro" onclick="setSeg('exp',this)">老手</button>
+                    </div>
+                    <div class="seg-row">
+                        <div class="seg-label">负重</div>
+                        <button class="seg-btn on" data-v="heavy" onclick="setSeg('load',this)">重装</button>
+                        <button class="seg-btn" data-v="light" onclick="setSeg('load',this)">轻装</button>
+                    </div>
+                    <div class="seg-row">
+                        <div class="seg-label">人数</div>
+                        <button class="seg-btn" data-v="1" onclick="setSeg('group',this)">1人</button>
+                        <button class="seg-btn on" data-v="2" onclick="setSeg('group',this)">2人</button>
+                        <button class="seg-btn" data-v="3" onclick="setSeg('group',this)">3人</button>
+                        <button class="seg-btn" data-v="4" onclick="setSeg('group',this)">4人+</button>
+                    </div>
+                    <div class="seg-row">
+                        <div class="seg-label">🚶 高反史</div>
+                        <button class="seg-btn" data-v="no" onclick="setSeg('amr',this)">无</button>
+                        <button class="seg-btn" data-v="yes" onclick="setSeg('amr',this)">有</button>
+                    </div>
+                    <div class="seg-row">
+                        <div class="seg-label">🦵 膝盖状况</div>
+                        <button class="seg-btn" data-v="good" onclick="setSeg('knee',this)">良好</button>
+                        <button class="seg-btn" data-v="bad" onclick="setSeg('knee',this)">旧伤/不适</button>
+                    </div>
+                    <div class="seg-row">
+                        <div class="seg-label">🧑‍🤝‍🧑 携带老人/小孩</div>
+                        <button class="seg-btn" data-v="no" onclick="setSeg('family',this)">无</button>
+                        <button class="seg-btn" data-v="yes" onclick="setSeg('family',this)">有</button>
+                    </div>
+                    <div class="seg-row">
+                        <div class="seg-label">🚄 到达交通</div>
+                        <button class="seg-btn on" data-v="train" onclick="setSeg('arrive',this)">火车</button>
+                        <button class="seg-btn" data-v="flight" onclick="setSeg('arrive',this)">飞机</button>
+                        <button class="seg-btn" data-v="van" onclick="setSeg('arrive',this)">拼车直达</button>
+                    </div>
+                    <div class="seg-row">
+                        <div class="seg-label">🚗 离开交通</div>
+                        <button class="seg-btn on" data-v="van" onclick="setSeg('leave',this)">专线拼车</button>
+                        <button class="seg-btn" data-v="flight" onclick="setSeg('leave',this)">飞机</button>
+                    </div>
+                    <div class="seg-row">
+                        <div class="seg-label">⚖️ 偏好</div>
+                        <button class="seg-btn" data-v="value" onclick="setSeg('pref',this)">性价比优先</button>
+                        <button class="seg-btn on" data-v="time" onclick="setSeg('pref',this)">时间优先</button>
+                    </div>
+                    <input class="plan-input" id="planFromCity" placeholder="出发城市（默认郑州，支持任意城市）" value="郑州">
+                    <!-- 火车车次选择（需求：每个出发城市都显示详细车次供选择） -->
+                    <div class="seg-row" id="trainPickRow" style="flex-direction:column;align-items:stretch;gap:6px">
+                        <div class="seg-label">🚆 选择你的车次 <span style="font-weight:400;color:var(--txt-mid)">（按出发城市显示真实车次，价格以 12306 为准）</span></div>
+                        <div class="pick-options" id="trainPickOptions"></div>
+                    </div>
+                    <input class="plan-input" id="planBudget" placeholder="预算（可选，如：3000元 或 交通2000内）">
+                    <textarea class="plan-input" id="planSpecial" placeholder="特别需求（可选，如：想雇马帮驮包 / 摄影 / 独自）"></textarea>
+                    <div class="seg-row" style="flex-wrap:wrap;gap:6px">
+                        <div class="seg-label">🏨 住宿怎么定？</div>
+                        <div class="seg-hint" style="font-size:12px;color:var(--txt-mid);flex:1;min-width:200px">填预算后自动按「预算−交通−门票−餐饮−气罐」反推住宿可支配额，匹配价位合适的酒店（含电话）</div>
+                    </div>
+                    <button class="plan-gen-btn" id="planGenBtn" onclick="generatePlan()">🚀 生成我的专属攻略</button>
+                </div>
+                <div class="plan-result" id="planResult"></div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">📁 导入轨迹文件</div>
+                <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+                    <div class="upload-icon">📤</div>
+                    <div class="upload-text">点击或拖拽上传轨迹文件</div>
+                    <div class="upload-formats">支持 .kml .gpx .geojson 轨迹文件</div>
+                    <div class="upload-hint" style="font-size:12px;opacity:.7;margin-top:4px">手机端请选择「文件 / 本机文件」入口；若列表为空，点左上角菜单切换到「所有文件」视图</div>
+                </div>
+                <input type="file" id="fileInput" class="file-input" multiple onchange="handleFileUpload(event)">
+                <div class="route-list" id="routeList"></div>
+                <div class="attach-panel" id="attachPanel" style="display:none;margin-top:14px">
+                    <div class="attach-head">🖼️ 轨迹附件 <span class="attach-count" id="attachCount"></span></div>
+                    <div class="attach-grid" id="attachGrid"></div>
+                    <div class="attach-empty" id="attachEmpty" style="display:none">轨迹文件内含媒体时自动展示</div>
+                </div>
+                <div class="upload-sep" style="margin:12px 0;height:1px;background:var(--color-border-tertiary, rgba(255,255,255,.12))"></div>
+                <div class="attach-zone" id="attachZone" onclick="document.getElementById('mediaInput').click()" style="cursor:pointer;border:1px dashed rgba(255,255,255,.25);border-radius:10px;padding:12px;text-align:center;font-size:13px">
+                    <div>🖼️ 添加照片 / 视频附件</div>
+                    <div style="font-size:12px;opacity:.7;margin-top:2px">从相册选择图片或视频</div>
+                </div>
+                <input type="file" id="mediaInput" class="file-input" accept="image/*,video/*" multiple onchange="handleMediaUpload(event)">
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">📊 路线统计</div>
+                <div class="stat-grid">
+                    <div class="stat-box">
+                        <div class="num" id="statDistance">0</div>
+                        <div class="label">距离 (km)</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="num" id="statElevation">0</div>
+                        <div class="label">爬升 (m)</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="num" id="statDescent">0</div>
+                        <div class="label">下降 (m)</div>
+                    </div>
+                </div>
+                <div class="stat-grid" style="margin-top: 10px;">
+                    <div class="stat-box">
+                        <div class="num" id="statMaxAlt">0</div>
+                        <div class="label">最高 (m)</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="num" id="statMinAlt">0</div>
+                        <div class="label">最低 (m)</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="num" id="statDuration">--</div>
+                        <div class="label">预计时间</div>
+                    </div>
+                </div>
+                <div class="elevation-chart">
+                    <h4>📈 高程剖面</h4>
+                    <canvas id="elevationCanvas"></canvas>
+                </div>
+                <div class="risk-indicator">
+                    <span>风险等级:</span>
+                    <span class="risk-level risk-low" id="riskLevel">低</span>
+                    <span id="riskDesc">适合大多数徒步者</span>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">🌤️ 天气预报 <span style="margin-left:auto;font-size:11px;font-weight:400;opacity:.7">稻城亚丁游客中心</span></div>
+                <div class="weather-grid">
+                    <div class="weather-item">
+                        <div class="label">温度</div>
+                        <div class="value" id="temp">--</div>
+                        <div class="unit">°C</div>
+                    </div>
+                    <div class="weather-item">
+                        <div class="label">风速</div>
+                        <div class="value" id="wind">--</div>
+                        <div class="unit">km/h</div>
+                    </div>
+                    <div class="weather-item">
+                        <div class="label">湿度</div>
+                        <div class="value" id="humidity">--</div>
+                        <div class="unit">%</div>
+                    </div>
+                    <div class="weather-item">
+                        <div class="label">能见度</div>
+                        <div class="value" id="visibility">--</div>
+                        <div class="unit">km</div>
+                    </div>
+                </div>
+                <div class="wx-source" id="wxSource">数据加载中…</div>
+                <button class="wx-refresh" onclick="refreshWeather()">🔄 刷新实时天气</button>
+                <iframe class="windy-embed" src="https://embed.windy.com/embed2.html?key=208eb3ba71916589c1d86958e35ed4fbc4e6d5e14908c72b45c34e8feda93bc6&lat=28.5396&lon=100.3154&zoom=10&type=map&overlay=rain&detail=&menu=&marker=28.5396,100.3154&calendar=&pressure="></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 地图样式（使用 OpenFreeMap 免费开源样式）
+        const MAP_STYLES = {
+            outdoor: 'https://api.maptiler.com/maps/outdoor/style.json?key=get_your_own_key',
+            satellite: 'https://api.maptiler.com/maps/hybrid/style.json?key=get_your_own_key',
+            street: 'https://api.maptiler.com/maps/streets/style.json?key=get_your_own_key'
+        };
+        
+        // 免费可达瓦片源（opentopomap/openstreetmap 在国内不可达，改用 Esri/腾讯/高德）
+        const FREE_STYLES = {
+            // 地形图：Esri World_Topo_Map（等高线+地貌着色，国内可达）
+            outdoor: {
+                version: 8,
+                sources: {
+                    'esri-topo': {
+                        type: 'raster',
+                        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'],
+                        tileSize: 256,
+                        maxzoom: 18,
+                        attribution: '© Esri'
+                    }
+                },
+                layers: [
+                    { id: 'esri-topo', type: 'raster', source: 'esri-topo', minzoom: 0, maxzoom: 18 }
+                ]
+            },
+            satellite: {
+                version: 8,
+                sources: {
+                    'esri-sat': {
+                        type: 'raster',
+                        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+                        tileSize: 256,
+                        maxzoom: 18,
+                        attribution: '© Esri'
+                    }
+                },
+                layers: [
+                    { id: 'esri-sat', type: 'raster', source: 'esri-sat', minzoom: 0, maxzoom: 18 }
+                ]
+            },
+            street: {
+                version: 8,
+                sources: {
+                    'tencent-street': {
+                        type: 'raster',
+                        tiles: ['https://rt0.map.gtimg.com/tile?z={z}&x={x}&y={y}&styleid=1'],
+                        tileSize: 256,
+                        maxzoom: 18,
+                        attribution: '© 腾讯地图'
+                    }
+                },
+                layers: [
+                    { id: 'tencent-street', type: 'raster', source: 'tencent-street', minzoom: 0, maxzoom: 18 }
+                ]
+            }
+        };
+
+        // 初始化地图（默认卫星图——需求：默认卫星图）
+        const DEFAULT_STYLE = 'satellite';
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: FREE_STYLES[DEFAULT_STYLE],
+            center: [100.3154, 28.5396], // 稻城亚丁游客中心
+            zoom: 11,
+            pitch: 45,
+            bearing: 0,
+            maxPitch: 85
+        });
+
+        // 暴露 map / 样式 / 视角 到 window（供录屏与外部集成调试，无害）
+        window.__map = map;
+        window.__styles = FREE_STYLES;
+
+        // 3D 地形增强：terrarium DEM 高程瓦片（AWS 可达），用于拉伸地形
+        const TERRAIN_SOURCE = {
+            type: 'raster-dem',
+            tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+            tileSize: 256,
+            maxzoom: 15,
+            encoding: 'terrarium'
+        };
+        map.on('load', () => {
+            try {
+                if (!map.getSource('terrain-dem')) map.addSource('terrain-dem', TERRAIN_SOURCE);
+                map.setTerrain({ source: 'terrain-dem', exaggeration: 1.5 });
+                console.log('3D 地形增强已启用');
+            } catch (e) { console.warn('terrain 失败:', e); }
+        });
+
+        // 添加导航控件
+        map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+        map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
+
+        // 存储轨迹数据
+        let routeData = [];
+        let routeCount = 0;
+        let currentStyle = DEFAULT_STYLE;
+        let viewMode = '3d'; // '3d' | '2d'
+
+        // 切换地图样式时重建轨迹图层（setStyle 会清空所有图层，这里统一重建）
+        function reapplyAfterStyle() {
+            // 重新添加轨迹图层 & 恢复 2D/3D 视角状态（setStyle 会重置 terrain/pitch）
+            routeData.forEach(route => {
+                addRouteLayers(route.id, route.geojson, route.color);
+            });
+            if (viewMode === '3d') {
+                try {
+                    if (!map.getSource('terrain-dem')) map.addSource('terrain-dem', TERRAIN_SOURCE);
+                    map.setTerrain({ source: 'terrain-dem', exaggeration: 1.5 });
+                } catch (e) { console.warn('terrain 恢复失败:', e); }
+            } else {
+                if (map.getTerrain()) map.setTerrain(null);
+            }
+        }
+
+        // 3D / 2D 视角切换（3D: 透视 + 地形拉伸；2D: 平面正射）
+        function setViewMode(mode, btn) {
+            viewMode = mode;
+            document.querySelectorAll('#viewSwitch .vsw-btn').forEach(b => b.classList.remove('on'));
+            if (btn) btn.classList.add('on');
+            else document.querySelector(`#viewSwitch .vsw-btn[data-v="${mode}"]`).classList.add('on');
+
+            if (mode === '3d') {
+                // 恢复透视与地形拉伸
+                if (map.getSource('terrain-dem')) {
+                    map.setTerrain({ source: 'terrain-dem', exaggeration: 1.5 });
+                }
+                map.easeTo({ pitch: 45, bearing: 0, duration: 800 });
+            } else {
+                // 关闭地形，回到正射平面
+                if (map.getTerrain()) map.setTerrain(null);
+                map.easeTo({ pitch: 0, bearing: 0, duration: 800 });
+            }
+        }
+
+        // 设置地图样式
+        function setMapStyle(style) {
+            document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            if (style === currentStyle) return; // 已在该样式，避免无谓重建
+
+            map.setStyle(FREE_STYLES[style]);
+            currentStyle = style;
+            
+            // setStyle 会清空图层，等 style.load 后重建轨迹与视角
+            map.once('style.load', reapplyAfterStyle);
+        }
+
+        // 添加轨迹图层（baseIdx：跨要素的全局序号，确保多段轨迹 sourceId 不冲突）
+        function addRouteLayers(routeId, geojson, color, baseIdx) {
+            let seg = 0; // 段内序号（MultiLineString/GeometryCollection 拆分）
+            geojson.features.forEach((feature, idx) => {
+                const g = feature.geometry;
+                if (!g) return;
+                const lines = [];
+                if (g.type === 'LineString') lines.push(g);
+                else if (g.type === 'MultiLineString') g.coordinates.forEach(c => lines.push({ type: 'LineString', coordinates: c }));
+                else if (g.type === 'GeometryCollection') {
+                    // MultiGeometry：展开子几何，线当轨迹、点当标记
+                    (g.geometries || []).forEach(sub => {
+                        if (sub.type === 'LineString') lines.push(sub);
+                        else if (sub.type === 'MultiLineString') sub.coordinates.forEach(c => lines.push({ type: 'LineString', coordinates: c }));
+                    });
+                }
+                lines.forEach((line) => {
+                    const sourceId = routeId + '-' + (baseIdx !== undefined ? baseIdx : idx) + '-' + seg;
+                    seg++;
+                    if (!map.getSource(sourceId)) {
+                        map.addSource(sourceId, {
+                            type: 'geojson',
+                            data: {
+                                type: 'Feature',
+                                geometry: line,
+                                properties: feature.properties || {}
+                            }
+                        });
+                        
+                        // 主轨迹线
+                        map.addLayer({
+                            id: sourceId + '-line',
+                            type: 'line',
+                            source: sourceId,
+                            layout: { 'line-join': 'round', 'line-cap': 'round' },
+                            paint: {
+                                'line-color': color,
+                                'line-width': 5,
+                                'line-opacity': 0.9
+                            }
+                        });
+                        
+                        // 发光效果
+                        map.addLayer({
+                            id: sourceId + '-glow',
+                            type: 'line',
+                            source: sourceId,
+                            layout: { 'line-join': 'round', 'line-cap': 'round' },
+                            paint: {
+                                'line-color': color,
+                                'line-width': 12,
+                                'line-opacity': 0.3,
+                                'line-blur': 4
+                            }
+                        });
+                    }
+                });
+            });
+        }
+
+        // 文件上传处理
+        const uploadZone = document.getElementById('uploadZone');
+        
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+        
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+        
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) processFile(file);
+        });
+
+        function handleFileUpload(event) {
+            const files = Array.from(event.target.files || []);
+            if (!files.length) return;
+            processFiles(files);
+            event.target.value = ''; // 允许重复选择同一文件
+        }
+
+        /* 纯媒体附件上传入口（照片/视频，手机端走相册） */
+        function handleMediaUpload(event) {
+            const files = Array.from(event.target.files || []);
+            if (!files.length) return;
+            files.forEach(f => {
+                if (f.type.startsWith('image/') || f.type.startsWith('video/')) {
+                    addUploadedMedia(f);
+                } else {
+                    alert('附件仅支持图片或视频: ' + f.name);
+                }
+            });
+            event.target.value = '';
+        }
+
+        /* 处理多文件：轨迹文件解析 + 媒体文件入附件 */
+        async function processFiles(files) {
+            let trackCount = 0;
+            for (const file of files) {
+                const isMedia = file.type.startsWith('image/') || file.type.startsWith('video/');
+                if (isMedia) {
+                    addUploadedMedia(file);
+                    continue;
+                }
+                const ext = file.name.split('.').pop().toLowerCase();
+                if (['kml', 'gpx', 'geojson', 'json'].includes(ext)) {
+                    try {
+                        const text = await file.text();
+                        const geojson = parseTrack(text, ext);
+                        // 解析后立即提取附件（先于地图渲染，即使地图渲染异常也不影响附件）
+                        const medias = [];
+                        try {
+                            (geojson.features || []).forEach(f => medias.push(...extractMediaDeep(f)));
+                        } catch (me) { console.warn('附件提取异常:', me); }
+                        if (medias.length) {
+                            medias.forEach(m => attachments.push({ ...m, src: 'track' }));
+                        }
+                        try {
+                            addRouteToMap(geojson, file.name);
+                        } catch (re) {
+                            console.error('轨迹渲染异常:', re);
+                            alert('轨迹已解析，但地图渲染失败: ' + file.name + ' → ' + re.message);
+                        }
+                        if (medias.length) renderAttachments();
+                        trackCount++;
+                    } catch (err) {
+                        console.error('解析错误:', err);
+                        alert('文件解析失败: ' + file.name + ' → ' + err.message);
+                    }
+                } else if (/^(https?:)?\/\//i.test(file.name)) {
+                    // 用户粘贴 URL（走 drop 的 DataTransfer 时）
+                    attachments.push({ url: file.name.trim(), type: /\.(mp4|mov|webm|avi)(\?|$)/i.test(file.name) ? 'video' : 'img', name: 'URL 附件', note: '', src: 'track' });
+                    renderAttachments();
+                } else {
+                    alert('不支持的文件格式: ' + file.name);
+                }
+            }
+            if (trackCount === 0 && !attachments.length) {
+                // 没有任何有效输入
+            }
+        }
+
+        function parseTrack(text, ext) {
+            if (ext === 'kml') {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(text, 'text/xml');
+                return toGeoJSON.kml(doc);
+            } else if (ext === 'gpx') {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(text, 'text/xml');
+                return toGeoJSON.gpx(doc);
+            } else {
+                return JSON.parse(text);
+            }
+        }
+
+        // 处理文件（单个，兼容旧调用）
+        async function processFile(file) {
+            const files = [file];
+            processFiles(files);
+        }
+
+        // 添加轨迹到地图
+        function addRouteToMap(geojson, filename) {
+            routeCount++;
+            const routeId = 'route-' + routeCount;
+            const color = getRandomColor();
+            
+            // 保存轨迹数据
+            routeData.push({ id: routeId, geojson, color });
+            
+            // 处理各种要素类型
+            geojson.features.forEach((feature, idx) => {
+                const g = feature.geometry;
+                // 收集本要素内所有线段（支持 LineString/MultiLineString/GeometryCollection 展开）
+                const lines = [];
+                const points = [];
+                if (g && g.type === 'LineString') lines.push(g);
+                else if (g && g.type === 'MultiLineString') g.coordinates.forEach(c => lines.push({ type: 'LineString', coordinates: c }));
+                else if (g && g.type === 'GeometryCollection') {
+                    (g.geometries || []).forEach(sub => {
+                        if (sub.type === 'LineString' || sub.type === 'MultiLineString') {
+                            if (sub.type === 'MultiLineString') sub.coordinates.forEach(c => lines.push({ type: 'LineString', coordinates: c }));
+                            else lines.push(sub);
+                        } else if (sub.type === 'Point') points.push(sub);
+                    });
+                }
+                // 添加轨迹线
+                if (lines.length) {
+                    addRouteLayers(routeId, { features: [feature] }, color, idx);
+                    // 计算统计数据（合并所有线段坐标）
+                    const allCoords = lines.flatMap(l => l.coordinates);
+                    calculateStats(allCoords, color, filename);
+                    // 飞入动画（仅首要素触发，避免多段重复抢视角）
+                    if (idx === 0) {
+                        map.flyTo({
+                            center: allCoords[0],
+                            zoom: 13,
+                            pitch: 45,
+                            duration: 2000
+                        });
+                    }
+                }
+                // 收集本要素内所有点（含 GeometryCollection 子点）
+                if (g && g.type === 'Point') points.push(g);
+                points.forEach(pt => {
+                    const name = feature.properties?.name || feature.properties?.name_en || '标注点';
+                    // description 可能被 togeojson 解析成对象 {value: ...}
+                    const descRaw = feature.properties?.description || feature.properties?.desc || '';
+                    const desc = typeof descRaw === 'string' ? descRaw
+                        : (descRaw && typeof descRaw === 'object' ? String(descRaw.value || descRaw.content || descRaw._ || '') : '');
+                    const medias = extractMediaDeep(feature);
+                    
+                    const el = document.createElement('div');
+                    el.innerHTML = `<div style="background:${color};width:24px;height:24px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);cursor:pointer;"></div>`;
+                    
+                    // 弹窗内容：名称 + 描述 + 媒体缩略图
+                    // desc 可能是纯文本或含 <img> 标签的 HTML；对纯文本转义，含标签则保留 img 渲染
+                    const descSafe = /<[a-z][\s\S]*>/i.test(desc)
+                        ? desc.replace(/<(?!\/?(?:img|br|p|b|strong|em|i|u|a)\b)[^>]*>/gi, '').replace(/<a\b[^>]*>/gi, '').replace(/<\/a>/gi, '')
+                        : escapeHtml(desc);
+                    let popupHtml = `<div class="marker-popup"><h4>${escapeHtml(name)}</h4><p>${descSafe}</p>`;
+                    if (medias.length) {
+                        popupHtml += `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:8px">`;
+                        medias.slice(0, 6).forEach((m) => {
+                            if (m.type === 'img') {
+                                if (m.missing) {
+                                    // 本地路径照片（未随轨迹上传）：显示可点击补选占位
+                                    popupHtml += `<div class="popup-media pick-photo" data-url="${escapeHtml(m.url)}" style="width:100%;height:64px;border-radius:8px;background:linear-gradient(135deg,rgba(255,149,0,.9),rgba(255,94,58,.9));display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;text-align:center;cursor:pointer;padding:4px">🖼️ 补选照片</div>`;
+                                } else {
+                                    popupHtml += `<img class="popup-media" data-url="${escapeHtml(m.url)}" src="${escapeHtml(m.url)}" style="width:100%;height:64px;object-fit:cover;border-radius:8px;cursor:zoom-in">`;
+                                }
+                            } else if (m.type === 'video') {
+                                popupHtml += `<div class="popup-media" data-url="${escapeHtml(m.url)}" style="width:100%;height:64px;border-radius:8px;background:linear-gradient(135deg,rgba(10,132,255,.7),rgba(94,92,230,.7));display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;cursor:pointer">▶️</div>`;
+                            }
+                        });
+                        popupHtml += `</div>`;
+                    }
+                    popupHtml += `</div>`;
+                    
+                    const marker = new maplibregl.Marker({ color })
+                        .setLngLat(pt.coordinates)
+                        .setPopup(new maplibregl.Popup({ offset: 15 })
+                            .setHTML(popupHtml))
+                        .addTo(map);
+                    // 弹窗媒体事件委托：挂到 document（popup 打开后才在 DOM，元素级委托不可靠）
+                    // 统一由下方 document 级委托处理（.popup-media 的 click / img error）
+                });
+            });
+            
+            // 更新列表
+            updateRouteList(filename, geojson);
+        }
+
+        // 计算统计数据
+        function calculateStats(coordinates, color, filename) {
+            if (!coordinates || coordinates.length < 2) return;
+            
+            let totalDistance = 0;
+            let totalAscent = 0;
+            let totalDescent = 0;
+            let maxAlt = coordinates[0][2] || 0;
+            let minAlt = coordinates[0][2] || 0;
+            const elevations = [];
+            
+            for (let i = 1; i < coordinates.length; i++) {
+                const prev = coordinates[i - 1];
+                const curr = coordinates[i];
+                
+                // 计算水平距离
+                const dist = getDistance(prev[0], prev[1], curr[0], curr[1]);
+                totalDistance += dist;
+                
+                // 计算高程变化
+                if (prev[2] !== undefined && curr[2] !== undefined) {
+                    const elevDiff = curr[2] - prev[2];
+                    if (elevDiff > 0) totalAscent += elevDiff;
+                    else totalDescent += Math.abs(elevDiff);
+                    
+                    maxAlt = Math.max(maxAlt, curr[2]);
+                    minAlt = Math.min(minAlt, curr[2]);
+                    elevations.push({ distance: totalDistance / 1000, elevation: curr[2] });
+                }
+            }
+            
+            // 更新 UI
+            document.getElementById('statDistance').textContent = (totalDistance / 1000).toFixed(1);
+            document.getElementById('statElevation').textContent = Math.round(totalAscent);
+            document.getElementById('statDescent').textContent = Math.round(totalDescent);
+            document.getElementById('statMaxAlt').textContent = Math.round(maxAlt);
+            document.getElementById('statMinAlt').textContent = Math.round(minAlt);
+            
+            // 计算预计时间
+            const hours = totalDistance / 1000 / 4 + totalAscent / 600;
+            document.getElementById('statDuration').textContent = hours < 1 ? Math.round(hours * 60) + '分' : hours.toFixed(1) + 'h';
+            
+            // 绘制高程图
+            drawElevationChart(elevations);
+            
+            // 风险评估
+            assessRisk(totalAscent, totalDistance, totalDescent);
+        }
+
+        // Haversine 公式计算距离
+        function getDistance(lon1, lat1, lon2, lat2) {
+            const R = 6371000;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // 绘制高程图
+        function drawElevationChart(elevations) {
+            const canvas = document.getElementById('elevationCanvas');
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width = canvas.offsetWidth * 2;
+            const h = canvas.height = canvas.offsetHeight * 2;
+            
+            ctx.clearRect(0, 0, w, h);
+            
+            if (elevations.length < 2) return;
+            
+            const minElev = Math.min(...elevations.map(e => e.elevation));
+            const maxElev = Math.max(...elevations.map(e => e.elevation));
+            const range = maxElev - minElev || 1;
+            const maxDist = Math.max(...elevations.map(e => e.distance));
+            
+            // 绘制填充区域
+            ctx.beginPath();
+            ctx.moveTo(0, h);
+            
+            elevations.forEach((e, i) => {
+                const x = (e.distance / maxDist) * w;
+                const y = h - ((e.elevation - minElev) / range) * (h - 20);
+                if (i === 0) ctx.lineTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            
+            ctx.lineTo(w, h);
+            ctx.closePath();
+            
+            const gradient = ctx.createLinearGradient(0, 0, 0, h);
+            gradient.addColorStop(0, 'rgba(102, 126, 234, 0.6)');
+            gradient.addColorStop(1, 'rgba(102, 126, 234, 0.1)');
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            // 绘制线条
+            ctx.beginPath();
+            elevations.forEach((e, i) => {
+                const x = (e.distance / maxDist) * w;
+                const y = h - ((e.elevation - minElev) / range) * (h - 20);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.strokeStyle = '#667eea';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+
+        // 风险评估
+        function assessRisk(ascent, distance, descent) {
+            const riskEl = document.getElementById('riskLevel');
+            const descEl = document.getElementById('riskDesc');
+            
+            const distanceKm = distance / 1000;
+            const steepness = ascent / distanceKm;
+            
+            let risk, desc;
+            
+            if (steepness < 100 && distanceKm < 15) {
+                risk = '低';
+                riskEl.className = 'risk-level risk-low';
+                desc = '适合大多数徒步者';
+            } else if (steepness < 200 && distanceKm < 25) {
+                risk = '中';
+                riskEl.className = 'risk-level risk-medium';
+                desc = '需有一定体能基础';
+            } else {
+                risk = '高';
+                riskEl.className = 'risk-level risk-high';
+                desc = '建议结伴同行，备好装备';
+            }
+            
+            riskEl.textContent = risk;
+            descEl.textContent = desc;
+        }
+
+        // 更新路线列表
+        function updateRouteList(filename, geojson) {
+            const list = document.getElementById('routeList');
+            const item = document.createElement('div');
+            item.className = 'route-item';
+            
+            const featCount = geojson.features.reduce((n, f) => {
+                const g = f.geometry;
+                if (!g) return n;
+                if (g.type === 'LineString') return n + 1;
+                if (g.type === 'MultiLineString') return n + g.coordinates.length;
+                if (g.type === 'GeometryCollection') {
+                    let c = 0;
+                    (g.geometries || []).forEach(sub => {
+                        if (sub.type === 'LineString') c++;
+                        else if (sub.type === 'MultiLineString') c += sub.coordinates.length;
+                    });
+                    return n + c;
+                }
+                return n;
+            }, 0);
+            
+            item.innerHTML = `
+                <div>
+                    <div class="name">📍 ${filename}</div>
+                    <div class="info">${featCount} 条路径</div>
+                </div>
+                <button class="del" onclick="this.parentElement.remove()">删除</button>
+            `;
+            
+            list.appendChild(item);
+        }
+
+        // 随机颜色
+        function getRandomColor() {
+            const colors = ['#667eea', '#f59e0b', '#22c55e', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        // 地图加载完成
+        map.on('load', () => {
+            console.log('地图加载完成，已切换到 MapLibre GL JS（无需 API Key）');
+        });
+
+        // 导入轨迹独立入口：滚动到上传面板并打开文件选择
+        function openImport() {
+            const panel = document.querySelector('.sidebar .panel:nth-of-type(2)') || document.getElementById('uploadZone');
+            if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            document.getElementById('fileInput').click();
+        }
+
+        // ---------- 实时天气（Open-Meteo，稻城亚丁游客中心 28.5396, 100.3154）----------
+        const WX_COORDS = { lat: 28.5396, lon: 100.3154 }; // 稻城亚丁游客中心（OSM 验证）
+        // WMO 天气代码 → 图标 + 中文描述
+        const WMO_MAP = {
+            0: ['☀️', '晴'], 1: ['🌤️', '大部晴朗'], 2: ['⛅', '多云'], 3: ['☁️', '阴'],
+            45: ['🌫️', '雾'], 48: ['🌫️', '冻雾'],
+            51: ['🌦️', '毛毛雨'], 53: ['🌦️', '毛毛雨'], 55: ['🌧️', '浓毛毛雨'],
+            56: ['🌧️', '冻毛毛雨'], 57: ['🌧️', '冻毛毛雨'],
+            61: ['🌧️', '小雨'], 63: ['🌧️', '中雨'], 65: ['🌧️', '大雨'],
+            66: ['🌧️', '冻雨'], 67: ['🌧️', '冻雨'],
+            71: ['🌨️', '小雪'], 73: ['🌨️', '中雪'], 75: ['❄️', '大雪'],
+            77: ['🌨️', '雪粒'],
+            80: ['🌦️', '阵雨'], 81: ['🌧️', '强阵雨'], 82: ['⛈️', '暴阵雨'],
+            85: ['🌨️', '阵雪'], 86: ['❄️', '强阵雪'],
+            95: ['⛈️', '雷暴'], 96: ['⛈️', '雷暴+冰雹'], 99: ['⛈️', '强雷暴+冰雹']
+        };
+        function toggleMapWeather() {
+            const w = document.getElementById('mapWeather');
+            if (w) w.classList.toggle('collapsed');
+        }
+        async function refreshWeather() {
+            const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+            set('temp', '…'); set('wind', '…'); set('humidity', '…'); set('visibility', '…');
+            set('mwTemp', '--'); set('mwHumidity', '--'); set('mwWind', '--'); set('mwIcon', '⏳');
+            try {
+                const r = await fetch('https://api.open-meteo.com/v1/forecast?' + new URLSearchParams({
+                    latitude: WX_COORDS.lat, longitude: WX_COORDS.lon,
+                    current: 'temperature_2m,relative_humidity_2m,wind_speed_10m,visibility,weather_code',
+                    timezone: 'Asia/Shanghai'
+                }));
+                const j = await r.json();
+                const c = j.current || {};
+                // 侧栏面板
+                if (c.temperature_2m !== undefined) set('temp', Math.round(c.temperature_2m));
+                if (c.relative_humidity_2m !== undefined) set('humidity', Math.round(c.relative_humidity_2m));
+                if (c.wind_speed_10m !== undefined) set('wind', Math.round(c.wind_speed_10m));
+                if (c.visibility !== undefined) set('visibility', (c.visibility / 1000).toFixed(1));
+                const t = new Date(c.time || Date.now());
+                const ts = (t.getMonth() + 1) + '/' + t.getDate() + ' ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+                set('wxSource', '实时 · Open-Meteo · ' + ts);
+                // 地图右上角卡片
+                const wmo = WMO_MAP[c.weather_code] || ['🌡️', '未知'];
+                if (c.temperature_2m !== undefined) set('mwTemp', Math.round(c.temperature_2m));
+                if (c.relative_humidity_2m !== undefined) set('mwHumidity', Math.round(c.relative_humidity_2m));
+                if (c.wind_speed_10m !== undefined) set('mwWind', Math.round(c.wind_speed_10m));
+                set('mwIcon', wmo[0]);
+                set('mwSource', wmo[1] + ' · ' + ts);
+            } catch (e) {
+                set('wxSource', '⚠️ 天气获取失败，请稍后重试');
+                set('mwSource', '获取失败，点此重试');
+                set('mwIcon', '⚠️');
+                console.warn('天气失败', e);
+            }
+        }
+        refreshWeather();
+    </script>
+
+    <!-- ============ 轨迹附件 Lightbox（图片/视频全屏查看） ============ -->
+    <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" onclick="closeLightbox()">
+        <button class="lb-close" onclick="event.stopPropagation();closeLightbox()">✕</button>
+        <button class="lb-nav lb-prev" onclick="event.stopPropagation();navLightbox(-1)">‹</button>
+        <div id="lbMedia" style="display:contents"></div>
+        <button class="lb-nav lb-next" onclick="event.stopPropagation();navLightbox(1)">›</button>
+    </div>
+    <script>
+        // ============ 轨迹附件系统 ============
+        let attachments = [];   // 全部附件 {url,type:'img'|'video'|'link',name,note,src:'track'|'upload'}
+        let lbIdx = 0;
+
+        /* 从轨迹 feature 中提取媒体引用（description 内嵌 <img>/<video>、Icon、链接） */
+        function extractMedia(feature) {
+            const out = [];
+            const p = (feature && feature.properties) || {};
+            const tryAdd = (url, type, name, note, missing) => {
+                if (!url) return;
+                const u = String(url).trim();
+                if (!u || u.startsWith('data:') && !u.startsWith('data:image')) return; // 跳过非图片 data URI
+                if (out.some(x => x.url === u)) return; // 去重（img 与 link 正则可能重复捕获）
+                out.push({ url: u, type, name: name || u.split('/').pop() || '附件', note: note || '', missing: !!missing });
+            };
+            // 1) description 内嵌 <img src> / <video src>（togeojson 可能解析成 {value} 对象）
+            const descRaw = p.description || p.desc || '';
+            const desc = typeof descRaw === 'string' ? descRaw
+                : (descRaw && typeof descRaw === 'object' ? String(descRaw.value || descRaw.content || descRaw._ || '') : '');
+            if (desc) {
+                const imgRe = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+                let m;
+                while ((m = imgRe.exec(desc))) {
+                    const src = m[1];
+                    const isRemote = /^(https?:)?\/\//i.test(src);
+                    tryAdd(src, 'img', m[0].match(/alt=["']([^"']+)["']/)?.[1] || '图片', '', !isRemote);
+                }
+                const vidRe = /<(?:video|source)[^>]+src=["']([^"']+)["'][^>]*>/gi;
+                while ((m = vidRe.exec(desc))) {
+                    const src = m[1];
+                    const isRemote = /^(https?:)?\/\//i.test(src);
+                    tryAdd(src, 'video', m[0].match(/alt=["']([^"']+)["']/)?.[1] || '视频', '', !isRemote);
+                }
+                // description 里的纯链接（http），且未被上方 <img>/<video> 正则捕获
+                const linkRe = /(https?:\/\/[^\s"<>]+\.(?:jpg|jpeg|png|gif|webp|mp4|mov|webm|avi))[)\s"<]?/gi;
+                while ((m = linkRe.exec(desc))) {
+                    const u = m[1];
+                    if (!/<img|<video|<source/i.test(desc.slice(0, m.index))) {
+                        tryAdd(u, /\.(mp4|mov|webm|avi)(\?|$)/i.test(u) ? 'video' : 'img', '');
+                    }
+                }
+            }
+            // 2) Icon href（KML 点图标）
+            const icon = p.icon || p.Icon || p.href || p['icon-href'];
+            if (icon) tryAdd(String(icon).replace(/^<.*?>(.*?)<\/.*?>$/, '$1').trim(), 'img', '图标');
+            // 3) ExtendedData 中常见的图片字段（含 GPX <link href>，可能为字符串或 {href} 对象）
+            ['photo', 'image', 'img', 'picture', 'media', 'url', 'href', 'link', 'src', 'thumbnail'].forEach(k => {
+                let v = p[k];
+                if (v && typeof v === 'object' && !Array.isArray(v)) v = v.href || v.url || v.src || v.content || null;
+                if (v && typeof v === 'string' && /^(https?:)?\/\//i.test(v.trim())) {
+                    const isVid = /\.(mp4|mov|webm|avi)(\?|$)/i.test(v);
+                    tryAdd(v, isVid ? 'video' : 'img', k);
+                }
+            });
+            // 4) 兜底：扫描所有 properties 值中以图片/视频扩展名结尾的引用（相对路径 / 本地文件名 / file:）
+            //    这类引用在网页里无法直接加载，标记 missing，供用户点击补选本地照片
+            if (Object.keys(p).length <= 12) { // 只在字段较少（典型标记对象）时兜底，避免误伤元数据
+                Object.entries(p).forEach(([k, v]) => {
+                    if (typeof v !== 'string') return;
+                    const s = v.trim();
+                    if (!s || /^(https?:)?\/\//i.test(s)) return;
+                    if (/\b(?:photos?|images?|attachments?|media)[\\/].*\.(?:jpe?g|png|gif|webp|heic|bmp)(?:\?|$)/i.test(s)
+                        || /\.(?:jpe?g|png|gif|webp|heic|bmp|mp4|mov|webm|avi)(?:\?|$)/i.test(s)) {
+                        const isVid = /\.(mp4|mov|webm|avi)(\?|$)/i.test(s);
+                        const name = s.split(/[\\/]/).pop() || k;
+                        out.push({ url: s, type: isVid ? 'video' : 'img', name, note: '本地文件未随轨迹上传', missing: true });
+                    }
+                });
+            }
+            return out;
+        }
+
+        /* 递归遍历 properties 中可能的媒体字段 */
+        function extractMediaDeep(feature) {
+            const out = extractMedia(feature);
+            const p = (feature && feature.properties) || {};
+            // GeoJSON 里附件常挂在 properties.attachments / extended_data / 直接 URL 字段
+            const cand = p.attachments || p.media || p.extended_data || null;
+            if (cand && typeof cand === 'object') {
+                Object.entries(cand).forEach(([k, v]) => {
+                    if (typeof v === 'string' && /^(https?:)?\/\//i.test(v.trim())) {
+                        const isVid = /\.(mp4|mov|webm|avi)(\?|$)/i.test(v);
+                        out.push({ url: v.trim(), type: isVid ? 'video' : 'img', name: k, note: '' });
+                    } else if (typeof v === 'object' && v) {
+                        const u = v.href || v.url || v.src || null;
+                        if (u) out.push({ url: String(u).trim(), type: /\.(mp4|mov|webm|avi)(\?|$)/i.test(String(u)) ? 'video' : 'img', name: k, note: v.name || '' });
+                    }
+                });
+            }
+            return out;
+        }
+
+        /* 上传的照片/视频作为附件加入 */
+        function addUploadedMedia(file) {
+            const isImg = file.type.startsWith('image/');
+            const isVid = file.type.startsWith('video/');
+            if (!isImg && !isVid) return null;
+            const url = URL.createObjectURL(file);
+            const name = file.name;
+            attachments.push({ url, type: isVid ? 'video' : 'img', name, note: '本地上传', src: 'upload' });
+            renderAttachments();
+            return true;
+        }
+
+        /* 渲染附件面板 */
+        function renderAttachments() {
+            const panel = document.getElementById('attachPanel');
+            const grid = document.getElementById('attachGrid');
+            const count = document.getElementById('attachCount');
+            const empty = document.getElementById('attachEmpty');
+            if (!panel) return;
+            grid.innerHTML = '';
+            if (!attachments.length) {
+                panel.style.display = 'none';
+                return;
+            }
+            panel.style.display = 'block';
+            count.textContent = attachments.length + ' 个';
+            empty.style.display = 'none';
+            attachments.forEach((a, i) => {
+                const cell = document.createElement('div');
+                cell.className = 'attach-item';
+                cell.title = a.name + (a.note ? ' · ' + a.note : '');
+                if (a.type === 'img') {
+                    if (a.missing) {
+                        // 轨迹里引用的本地图片未随轨迹上传：显示可点击的补选占位
+                        cell.innerHTML = `<div class="ext-badge" style="background:linear-gradient(135deg,rgba(255,149,0,.9),rgba(255,94,58,.9))"><div>🖼️</div><div class="lbl">${escapeHtml(a.name)}</div><div class="lbl">本地图片 · 点击补选</div></div>`;
+                    } else {
+                        const img = document.createElement('img');
+                        img.loading = 'lazy';
+                        img.src = a.url;
+                        img.alt = a.name;
+                        img.onerror = () => { a.loadFailed = true; cell.innerHTML = `<div class="ext-badge"><div>🖼️</div><div class="lbl">${escapeHtml(a.name)}</div><div class="lbl">点击补选照片</div></div>`; };
+                        cell.appendChild(img);
+                    }
+                } else if (a.type === 'video') {
+                    const poster = document.createElement('div');
+                    poster.className = 'video-badge';
+                    poster.textContent = '▶️';
+                    cell.appendChild(poster);
+                    const name = document.createElement('div');
+                    name.className = 'att-note';
+                    name.textContent = '🎬 ' + a.name;
+                    cell.appendChild(name);
+                } else {
+                    const ext = document.createElement('div');
+                    ext.className = 'ext-badge';
+                    ext.innerHTML = `<div>🔗</div><div class="lbl">${escapeHtml(a.name)}</div>`;
+                    cell.appendChild(ext);
+                }
+                cell.onclick = () => (a.missing || a.loadFailed) ? pickAndReplace(i) : openLightbox(i);
+                grid.appendChild(cell);
+            });
+        }
+
+        /* Lightbox 打开/导航/关闭 */
+        function openLightbox(i) {
+            if (!attachments.length) return;
+            lbIdx = (i + attachments.length) % attachments.length;
+            const a = attachments[lbIdx];
+            const lb = document.getElementById('lightbox');
+            const box = document.getElementById('lbMedia');
+            box.innerHTML = '';
+            const title = document.createElement('div');
+            title.className = 'lb-title';
+            title.textContent = a.name;
+            const sub = document.createElement('div');
+            sub.className = 'lb-sub';
+            sub.textContent = (lbIdx + 1) + ' / ' + attachments.length + (a.note ? ' · ' + a.note : '') + (a.src === 'upload' ? ' · 本地上传' : '');
+            if (a.type === 'img') {
+                const img = document.createElement('img');
+                img.src = a.url; img.alt = a.name;
+                img.onerror = () => {
+                    // 图片加载失败：给出可操作的兜底（补选本地照片）
+                    const fallback = document.createElement('div');
+                    fallback.style.cssText = 'color:#fff;font-size:15px;max-width:80vw;text-align:center;word-break:break-all;cursor:default;display:flex;flex-direction:column;align-items:center;gap:12px;padding:20px';
+                    const hint = document.createElement('div');
+                    hint.textContent = '图片无法加载（轨迹内引用的是本地文件或链接已失效）：' + a.url;
+                    hint.style.cssText = 'opacity:.75;font-size:13px;word-break:break-all';
+                    const btn = document.createElement('button');
+                    btn.className = 'lb-open';
+                    btn.textContent = '📷 从手机补选照片';
+                    btn.onclick = (e) => { e.stopPropagation(); pickAndReplace(lbIdx); };
+                    fallback.appendChild(hint);
+                    fallback.appendChild(btn);
+                    box.appendChild(fallback);
+                };
+                box.appendChild(img);
+            } else if (a.type === 'video') {
+                const v = document.createElement('video');
+                v.src = a.url; v.controls = true; v.autoplay = true;
+                v.style.maxWidth = '92vw'; v.style.maxHeight = '82vh';
+                box.appendChild(v);
+            } else {
+                const msg = document.createElement('div');
+                msg.style.cssText = 'color:#fff;font-size:15px;max-width:80vw;text-align:center;word-break:break-all;cursor:default';
+                msg.textContent = a.url;
+                box.appendChild(msg);
+            }
+            box.appendChild(title);
+            box.appendChild(sub);
+            // blob:/data: 已内嵌展示的图片/视频无需"新窗口打开"
+            const isEmbeddable = a.type === 'img' || a.type === 'video' || /^blob:|^data:/i.test(a.url || '');
+            if (a.type === 'link' || (!isEmbeddable && a.url && !/\.(jpg|jpeg|png|gif|webp|mp4|mov|webm|avi)(\?|$)/i.test(a.url))) {
+                const btn = document.createElement('button');
+                btn.className = 'lb-open';
+                btn.textContent = '🔗 在新窗口打开';
+                btn.onclick = (e) => { e.stopPropagation(); window.open(a.url, '_blank'); };
+                box.appendChild(btn);
+            }
+            lb.classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeLightbox() {
+            const lb = document.getElementById('lightbox');
+            const v = lb && lb.querySelector('video');
+            if (v) { v.pause(); v.removeAttribute('src'); }
+            if (lb) lb.classList.remove('show');
+            document.body.style.overflow = '';
+        }
+        function navLightbox(dir) {
+            if (!attachments.length) return;
+            const v = document.getElementById('lightbox').querySelector('video');
+            if (v) { v.pause(); v.removeAttribute('src'); }
+            openLightbox(lbIdx + dir);
+        }
+        document.addEventListener('keydown', (e) => {
+            if (!document.getElementById('lightbox').classList.contains('show')) return;
+            if (e.key === 'Escape') closeLightbox();
+            if (e.key === 'ArrowLeft') navLightbox(-1);
+            if (e.key === 'ArrowRight') navLightbox(1);
+        });
+        function escapeHtml(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        /* 弹窗缩略图点击：直接打开某个 URL 的 lightbox */
+        function openLightboxAt(url) {
+            const exists = attachments.findIndex(a => a.url === url);
+            // 无协议/相对路径/本地文件名 → 无法在网页加载，直接进补选
+            const isLocalRef = !/^(https?:)?\/\//i.test(url) && !/^blob:/i.test(url) && !/^data:/i.test(url);
+            if (exists >= 0) {
+                if (isLocalRef || attachments[exists].missing) { pickAndReplace(exists); return; }
+                openLightbox(exists); return;
+            }
+            if (isLocalRef) {
+                attachments.push({ url, type: 'img', name: '图片', note: '来自轨迹标记', missing: true, src: 'track' });
+                renderAttachments();
+                pickAndReplace(attachments.length - 1);
+                return;
+            }
+            const isVid = /\.(mp4|mov|webm|avi)(\?|$)/i.test(url);
+            attachments.push({ url, type: isVid ? 'video' : 'img', name: '附件', note: '来自轨迹标记', src: 'track' });
+            renderAttachments();
+            openLightbox(attachments.length - 1);
+        }
+
+        /* 附件图片加载失败 → 从本地/相册补选照片替换（手机端走相册） */
+        function pickAndReplace(i) {
+            const a = attachments[i];
+            if (!a) return;
+            const file = document.createElement('input');
+            file.type = 'file';
+            file.accept = 'image/*';
+            file.style.display = 'none';
+            document.body.appendChild(file);
+            file.onchange = () => {
+                const f = file.files && file.files[0];
+                document.body.removeChild(file);
+                if (!f) return;
+                if (!f.type.startsWith('image/')) { alert('请选择图片文件'); return; }
+                const url = URL.createObjectURL(f);
+                a.url = url;
+                a.type = 'img';
+                a.missing = false;
+                a.src = 'upload';
+                a.note = '已补选本地照片';
+                if (a.name === '图片' || a.name === '附件' || a.name.includes('本地文件')) a.name = f.name;
+                renderAttachments();
+                openLightbox(i);
+            };
+            file.oncancel = () => { document.body.removeChild(file); };
+            file.click();
+        }
+
+        /* 按 URL 补选照片（弹窗缩略图/占位点击用）：找到对应附件替换，找不到则新建一个 */
+        function pickAndReplaceByUrl(url) {
+            let idx = attachments.findIndex(a => a.url === url);
+            if (idx < 0) {
+                attachments.push({ url, type: 'img', name: '图片', note: '', missing: true, src: 'track' });
+                idx = attachments.length - 1;
+            }
+            renderAttachments();
+            pickAndReplace(idx);
+        }
+
+        /* 弹窗媒体全局事件委托：popup 打开后才在 DOM，用 document 级委托覆盖 */
+        document.addEventListener('click', (ev) => {
+            const t = ev.target.closest && ev.target.closest('.popup-media');
+            if (!t) return;
+            ev.stopPropagation();
+            const url = t.dataset.url || '';
+            const isLocalRef = !/^(https?:)?\/\//i.test(url) && !/^blob:/i.test(url) && !/^data:/i.test(url);
+            if (isLocalRef || t.classList.contains('pick-photo')) { pickAndReplaceByUrl(url); return; }
+            if (t.tagName === 'IMG') { openLightboxAt(url); }
+        }, true);
+        document.addEventListener('error', (ev) => {
+            if (ev.target.tagName !== 'IMG') return;
+            const img = ev.target;
+            const url = img.dataset.url || '';
+            if (!url) return;
+            const ph = document.createElement('div');
+            ph.className = 'popup-media pick-photo';
+            ph.dataset.url = url;
+            ph.style.cssText = 'width:100%;height:64px;border-radius:8px;background:linear-gradient(135deg,rgba(255,149,0,.9),rgba(255,94,58,.9));display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;text-align:center;cursor:pointer;padding:4px';
+            ph.textContent = '🖼️ 补选照片';
+            img.replaceWith(ph);
+        }, true);
+    </script>
+
+    <!-- ============ V2 首次使用免责声明弹窗 ============ -->
+    <style>
+        .v2-mask {
+            position: fixed; inset: 0; z-index: 9999;
+            background: rgba(30, 42, 70, 0.35);
+            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px; opacity: 0; pointer-events: none;
+            transition: opacity .35s var(--ease);
+        }
+        .v2-mask.show { opacity: 1; pointer-events: auto; }
+        .v2-dialog {
+            width: 100%; max-width: 460px;
+            background: var(--glass-bg-strong, rgba(255,255,255,.78));
+            backdrop-filter: blur(28px) saturate(180%); -webkit-backdrop-filter: blur(28px) saturate(180%);
+            border: 1px solid var(--glass-border-strong, rgba(255,255,255,.95));
+            border-radius: var(--r-lg, 20px);
+            box-shadow: var(--shadow-panel, 0 18px 50px -18px rgba(31,58,110,.28));
+            padding: 26px 24px 22px;
+            transform: translateY(14px) scale(.97);
+            transition: transform .35s var(--ease);
+            position: relative; overflow: hidden;
+        }
+        .v2-mask.show .v2-dialog { transform: translateY(0) scale(1); }
+        .v2-dialog::before {
+            content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+            background: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.12) 40%, rgba(255,255,255,.04));
+        }
+        .v2-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: linear-gradient(135deg, #0A84FF, #5E5CE6);
+            color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .5px;
+            padding: 5px 12px; border-radius: var(--r-pill, 999px);
+            margin-bottom: 14px; position: relative;
+        }
+        .v2-title { font-size: 21px; font-weight: 700; color: var(--txt-hi, rgba(20,24,38,.96)); margin-bottom: 6px; position: relative; }
+        .v2-sub { font-size: 13px; color: var(--txt-mid, rgba(60,68,90,.68)); margin-bottom: 16px; position: relative; }
+        .v2-item {
+            display: flex; gap: 12px; padding: 13px 14px; margin-bottom: 10px;
+            background: rgba(255,255,255,.5); border: 1px solid var(--glass-hairline, rgba(20,24,38,.08));
+            border-radius: var(--r-md, 14px); position: relative;
+        }
+        .v2-item .v2-num {
+            flex: 0 0 24px; height: 24px; border-radius: 50%;
+            background: linear-gradient(135deg, #0A84FF, #5E5CE6); color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 700; margin-top: 1px;
+        }
+        .v2-item p { font-size: 13.5px; line-height: 1.65; color: var(--txt, rgba(20,24,38,.8)); }
+        .v2-item p b { color: var(--txt-hi, rgba(20,24,38,.96)); font-weight: 700; }
+        .v2-actions { display: flex; gap: 10px; margin-top: 18px; position: relative; }
+        .v2-btn {
+            flex: 1; padding: 12px 16px; border: none; border-radius: var(--r-md, 14px);
+            font-size: 15px; font-weight: 600; cursor: pointer; transition: all .2s var(--ease);
+        }
+        .v2-btn.primary {
+            background: linear-gradient(135deg, #0A84FF, #5E5CE6); color: #fff;
+            box-shadow: var(--shadow-glow-blue, 0 8px 26px -8px rgba(10,132,255,.45));
+        }
+        .v2-btn.primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
+        .v2-btn.ghost { background: rgba(20,24,38,.06); color: var(--txt-mid, rgba(60,68,90,.68)); }
+        .v2-btn.ghost:hover { background: rgba(20,24,38,.1); }
+        .v2-foot { margin-top: 14px; font-size: 11px; color: var(--txt-low, rgba(60,68,90,.42)); text-align: center; position: relative; }
+    </style>
+    <div class="v2-mask" id="v2Mask" role="dialog" aria-modal="true" aria-labelledby="v2Title">
+        <div class="v2-dialog">
+            <div class="v2-badge">⚖️ V2 版本 · 首次使用须知</div>
+            <div class="v2-title" id="v2Title">欢迎使用 · 请先阅读以下声明</div>
+            <div class="v2-sub">亚丁大转山徒步路线规划平台</div>
+            <div class="v2-item">
+                <div class="v2-num">1</div>
+                <p><b>免责声明：</b>本平台提供的数据与信息仅供规划参考，<b>不构成任何徒步依据或安全保证</b>。使用者应在<b>法律法规允许的范围内</b>自行评估风险、自负其责，并依法开展徒步活动。</p>
+            </div>
+            <div class="v2-item">
+                <div class="v2-num">2</div>
+                <p><b>版权声明：</b>本平台版权归<b>制作者</b>所有。未经授权，<b>不得用于商业或其他用途</b>。如发现侵权行为，制作者将<b>依法追究法律责任</b>。</p>
+            </div>
+            <div class="v2-actions">
+                <button class="v2-btn primary" id="v2Agree">我已知晓，同意并进入</button>
+            </div>
+            <div class="v2-foot">确认后仅首次显示 · 再次访问不再弹出</div>
+        </div>
+    </div>
+    <script>
+        // V2 首次使用声明：localStorage 记住，仅首次弹出
+        (function () {
+            try {
+                if (localStorage.getItem('yading_v2_disclaimer') === '1') return;
+            } catch (e) { /* 隐私模式等场景下 localStorage 不可用，仍展示一次 */ }
+            const mask = document.getElementById('v2Mask');
+            const agree = document.getElementById('v2Agree');
+            if (!mask || !agree) return;
+            requestAnimationFrame(() => mask.classList.add('show'));
+            function close() {
+                mask.classList.remove('show');
+                setTimeout(() => { mask.style.display = 'none'; }, 350);
+                try { localStorage.setItem('yading_v2_disclaimer', '1'); } catch (e) {}
+            }
+            agree.addEventListener('click', close);
+            mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+        })();
+    </script>
+</body>
+</html>
