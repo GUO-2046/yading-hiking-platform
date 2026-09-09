@@ -1208,6 +1208,26 @@
                 <div class="plan-result" id="planResult"></div>
             </div>
 
+            <div class="panel" id="calendarPanel">
+                <div class="panel-title">⏰ 抢票日历提醒 <span style="margin-left:auto;font-size:11px;font-weight:400;opacity:.7">一键加入手机日历</span></div>
+                <div style="font-size:12px;color:var(--txt-mid);line-height:1.6;margin-bottom:10px">输入你的进山日期，自动推算免票预约抢票日与关键节点，生成日历文件加入系统日历（iOS/安卓原生支持，带闹铃提醒）。</div>
+                <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+                    <input class="plan-input" type="date" id="calStartDate" style="flex:1;min-width:150px" value="">
+                    <select class="plan-input" id="calWindow" style="flex:0 0 90px">
+                        <option value="15" selected>窗口 15 天</option>
+                        <option value="10">窗口 10 天</option>
+                    </select>
+                </div>
+                <div id="calPreview" style="font-size:13px;line-height:1.9;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:10px 12px;margin-bottom:10px">
+                    <div style="color:var(--txt-mid);font-size:12px">选择进山日期后自动显示抢票与复核节点</div>
+                </div>
+                <div style="display:flex;gap:8px">
+                    <button class="plan-gen-btn" id="calGenBtn" style="flex:1" disabled>📅 加入手机日历（.ics）</button>
+                    <button class="seg-btn" id="calResetBtn" onclick="resetCalendar()" style="flex:0 0 70px">重置</button>
+                </div>
+                <div style="font-size:11px;color:var(--txt-mid);margin-top:8px;line-height:1.6">💡 下载后：<b>iPhone</b> 点开文件自动弹出「添加到日历」；<b>安卓</b> 点开选择日历应用导入。免票预约窗口以景区官方公布为准（当前多按 15 天执行）。</div>
+            </div>
+
             <div class="panel">
                 <div class="panel-title">📁 导入轨迹文件</div>
                 <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
@@ -2388,6 +2408,132 @@
             mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
             document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
         })();
+
+        /* ===== 抢票日历提醒：一键加入手机日历（.ics）===== */
+        (function () {
+            const $ = (id) => document.getElementById(id);
+            const startInput = $('calStartDate'), winSel = $('calWindow'),
+                  preview = $('calPreview'), genBtn = $('calGenBtn');
+
+            // YYYY-MM-DD 与 Date 互转（本地时区，避免 UTC 偏移）
+            function toDate(ymd) {
+                const p = String(ymd).split('-').map(Number);
+                return new Date(p[0], p[1] - 1, p[2]);
+            }
+            function toYMD(d) {
+                const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
+                return y + '-' + m + '-' + dd;
+            }
+            function addDays(d, n) {
+                const x = new Date(d); x.setDate(x.getDate() + n); return x;
+            }
+            function fmtCn(d) {
+                const w = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
+                return (d.getMonth() + 1) + '月' + d.getDate() + '日 周' + w;
+            }
+            // ics 时间戳：本地时间 → YYYYMMDDTHHMMSS（不带 Z，按本地时区解释）
+            function icsDT(d, hm) {
+                const p = String(hm).split(':').map(Number);
+                const x = new Date(d); x.setHours(p[0], p[1], 0, 0);
+                return x.getFullYear() +
+                    String(x.getMonth() + 1).padStart(2, '0') +
+                    String(x.getDate()).padStart(2, '0') + 'T' +
+                    String(x.getHours()).padStart(2, '0') +
+                    String(x.getMinutes()).padStart(2, '0') + '00';
+            }
+            // 结束时间：起始日期时间 + 时长（分钟），返回本地 ics 时间戳
+            function icsEndDT(d, hm, durMin) {
+                const p = String(hm).split(':').map(Number);
+                const x = new Date(d); x.setHours(p[0], p[1] + durMin, 0, 0);
+                return x.getFullYear() +
+                    String(x.getMonth() + 1).padStart(2, '0') +
+                    String(x.getDate()).padStart(2, '0') + 'T' +
+                    String(x.getHours()).padStart(2, '0') +
+                    String(x.getMinutes()).padStart(2, '0') + '00';
+            }
+            function esc(v) { return String(v).replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n'); }
+
+            // 计算全部关键节点（通用化：由进山日期 + 预约窗口推算）
+            function calcNodes(startYMD, windowDays) {
+                const start = toDate(startYMD);
+                const ticketDay = addDays(start, -windowDays);      // 免票预约抢票日（进山 − 窗口）
+                const reviewDay = addDays(ticketDay, 5);            // 抢票后 5 天复核
+                const weatherDay = addDays(start, -5);              // 出发前 5 天复核天气
+                const gearDay = addDays(start, -7);                 // 出发前 7 天装备自查
+                return { start, ticketDay, reviewDay, weatherDay, gearDay };
+            }
+
+            function renderPreview() {
+                const ymd = startInput.value;
+                if (!ymd) { preview.innerHTML = '<div style="color:var(--txt-mid);font-size:12px">选择进山日期后自动显示抢票与复核节点</div>'; genBtn.disabled = true; return; }
+                const win = parseInt(winSel.value, 10);
+                const n = calcNodes(ymd, win);
+                const today = new Date(); today.setHours(0, 0, 0, 0);
+                function tag(d) { return d < today ? '<span style="color:#f2a35b">（已过）</span>' : ''; }
+                preview.innerHTML =
+                    '<div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline">' +
+                    '<span style="color:var(--txt-mid)">🏔️ 进山</span><span><b>' + fmtCn(n.start) + '</b></span>' +
+                    '<span style="color:var(--txt-mid)">🎫 免票抢票</span><span><b style="color:#ffd166">' + fmtCn(n.ticketDay) + '</b> 07:00 放票（进山前 ' + win + ' 天）' + tag(n.ticketDay) + '</span>' +
+                    '<span style="color:var(--txt-mid)">✅ 抢票复核</span><span>' + fmtCn(n.reviewDay) + tag(n.reviewDay) + '</span>' +
+                    '<span style="color:var(--txt-mid)">🌤️ 天气复核</span><span>' + fmtCn(n.weatherDay) + tag(n.weatherDay) + '</span>' +
+                    '<span style="color:var(--txt-mid)">🎒 装备自查</span><span>' + fmtCn(n.gearDay) + tag(n.gearDay) + '</span>' +
+                    '</div>';
+                genBtn.disabled = false;
+            }
+
+            // 生成 .ics 并触发下载（多事件 + 前置闹铃）
+            function genICS() {
+                const ymd = startInput.value;
+                if (!ymd) return;
+                const win = parseInt(winSel.value, 10);
+                const n = calcNodes(ymd, win);
+                const evs = [
+                    { name: '稻城亚丁｜免票预约抢票（进山前' + win + '天）', d: n.ticketDay, hm: '07:00', dur: 60, alarm: -15, note: '7:00 放票，第一时间抢免票名额。预约窗口以景区官方公布为准。' },
+                    { name: '稻城亚丁｜抢票结果复核', d: n.reviewDay, hm: '10:00', dur: 30, alarm: -60, note: '复核免票预约是否成功，如有问题及时补抢。' },
+                    { name: '稻城亚丁｜天气复核', d: n.weatherDay, hm: '20:00', dur: 15, alarm: -30, note: '出发前复核天气，决定是否调整行程/增补装备（10 月备冰爪雪套）。' },
+                    { name: '稻城亚丁｜装备自查', d: n.gearDay, hm: '20:00', dur: 15, alarm: -30, note: '重装装备清点：睡袋温标、冰爪、雪套、气罐、高反药。' },
+                    { name: '稻城亚丁｜进山出发', d: n.start, hm: '07:00', dur: 120, alarm: -720, note: '冲古寺进山，开始大转山徒步。' }
+                ];
+                let ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//YadingHiking//Yading Calendar//CN',
+                           'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:稻城亚丁行程提醒'];
+                evs.forEach((e, i) => {
+                    const uid = 'yading-' + i + '-' + ymd + '@yading-hiking';
+                    ics.push('BEGIN:VEVENT');
+                    ics.push('UID:' + uid);
+                    ics.push('DTSTAMP:' + icsDT(new Date(), '00:00'));
+                    ics.push('DTSTART:' + icsDT(e.d, e.hm));
+                    ics.push('DTEND:' + icsEndDT(e.d, e.hm, e.dur));
+                    ics.push('SUMMARY:' + esc(e.name));
+                    ics.push('DESCRIPTION:' + esc(e.note));
+                    ics.push('BEGIN:VALARM');
+                    ics.push('ACTION:DISPLAY');
+                    ics.push('DESCRIPTION:' + esc(e.name));
+                    ics.push('TRIGGER:-PT' + Math.abs(e.alarm) + 'M');
+                    ics.push('END:VALARM');
+                    ics.push('END:VEVENT');
+                });
+                ics.push('END:VCALENDAR');
+                const blob = new Blob([ics.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = '稻城亚丁行程提醒.ics';
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+            }
+
+            startInput.addEventListener('input', renderPreview);
+            winSel.addEventListener('change', renderPreview);
+            genBtn.addEventListener('click', genICS);
+            // 默认空日期，用户自行选择；提供快捷"示例"提示
+            if (startInput) { startInput.placeholder = '选择进山日期'; }
+        })();
+
+        function resetCalendar() {
+            document.getElementById('calStartDate').value = '';
+            document.getElementById('calWindow').value = '15';
+            const ev = document.createEvent('Event'); ev.initEvent('input', true, true);
+            document.getElementById('calStartDate').dispatchEvent(ev);
+        }
     </script>
 </body>
 </html>
