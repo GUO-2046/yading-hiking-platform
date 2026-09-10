@@ -200,36 +200,39 @@
         .map-container { width: 100%; height: 100%; }
         #map { width: 100%; height: 100%; }
 
-        /* ---------- 地图全屏 ---------- */
-        .map-section:fullscreen {
-            width: 100vw;
-            height: 100vh;
-            max-width: none;
+        /* ---------- 地图展开（页面内铺满 + 收起右侧栏）---------- */
+        /* 苹果弹性曲线：cubic-bezier(.32,.72,0,1) —— 与 iOS 面板推入/推出一致 */
+        .main-container {
+            transition: grid-template-columns .58s cubic-bezier(.32, .72, 0, 1),
+                        gap .58s cubic-bezier(.32, .72, 0, 1),
+                        padding .58s cubic-bezier(.32, .72, 0, 1);
+        }
+        /* 展开态：侧栏列宽收为 0，地图独占整行 */
+        .main-container.map-expanded {
+            grid-template-columns: minmax(0, 1fr) 0px;
+            gap: 0;
+            padding: 0;
+        }
+        .main-container.map-expanded .map-section {
             border-radius: 0;
             box-shadow: none;
         }
-        .map-section:-webkit-full-screen {
-            width: 100vw;
-            height: 100vh;
-            max-width: none;
-            border-radius: 0;
-            box-shadow: none;
+        .map-section {
+            transition: border-radius .58s cubic-bezier(.32, .72, 0, 1),
+                        box-shadow .58s cubic-bezier(.32, .72, 0, 1);
         }
-        /* 不支持 Fullscreen API 时的降级（如 iPhone Safari）：固定定位铺满 */
-        .map-section.pseudo-fs {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            bottom: 0 !important;
-            z-index: 9999;
-            width: 100vw !important;
-            height: 100vh !important;
-            max-width: none;
-            border-radius: 0;
-            box-shadow: none;
+        /* 侧栏：随列宽收缩，同时做位移+淡出，避免内容被硬切 */
+        .sidebar {
+            min-width: 0;
+            transition: opacity .28s var(--ease),
+                        transform .58s cubic-bezier(.32, .72, 0, 1);
         }
-        .map-section.pseudo-fs .map-overlay { max-width: calc(100% - 32px); }
+        .main-container.map-expanded .sidebar {
+            opacity: 0;
+            transform: translateX(56px);
+            pointer-events: none;
+            overflow: hidden;
+        }
         .fs-btn { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
         .fs-btn.on {
             background: linear-gradient(135deg, rgba(10, 132, 255, 0.95), rgba(94, 92, 230, 0.95));
@@ -238,6 +241,46 @@
             box-shadow: var(--shadow-glow-blue);
         }
         .fs-btn .fs-ico { font-size: 14px; line-height: 1; }
+
+        /* 展开后浮出的「恢复侧边栏」按钮（底部居中，带淡入上滑） */
+        .map-restore {
+            position: absolute;
+            left: 50%;
+            bottom: 20px;
+            z-index: 12;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 11px 20px;
+            border-radius: var(--r-pill);
+            background: rgba(255, 255, 255, 0.82);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(18px) saturate(1.4);
+            -webkit-backdrop-filter: blur(18px) saturate(1.4);
+            box-shadow: var(--shadow-float);
+            color: var(--txt);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+            opacity: 0;
+            transform: translateX(-50%) translateY(14px) scale(.96);
+            pointer-events: none;
+            transition: opacity .3s var(--ease),
+                        transform .58s cubic-bezier(.32, .72, 0, 1),
+                        background .2s var(--ease);
+        }
+        .map-restore.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0) scale(1);
+            pointer-events: auto;
+        }
+        .map-restore:hover {
+            background: rgba(255, 255, 255, 0.96);
+            border-color: rgba(10, 132, 255, 0.45);
+            transform: translateX(-50%) translateY(-1px) scale(1);
+        }
 
         .map-overlay {
             position: absolute;
@@ -1210,8 +1253,8 @@
                     <button class="vsw-btn on" data-v="3d" onclick="setViewMode('3d', this)">⛰️ 3D</button>
                     <button class="vsw-btn" data-v="2d" onclick="setViewMode('2d', this)">🗺️ 2D</button>
                 </span>
-                <button class="style-btn fs-btn" id="fsBtn" onclick="toggleMapFullscreen()" title="全屏查看地图（Esc / F 键退出）">
-                    <span class="fs-ico" id="fsIco">⛶</span><span id="fsTxt">全屏</span>
+                <button class="style-btn fs-btn" id="fsBtn" onclick="toggleMapExpand()" title="展开地图并收起右侧栏（Esc / F 键恢复）">
+                    <span class="fs-ico" id="fsIco">⛶</span><span id="fsTxt">展开</span>
                 </button>
             </div>
             <div class="map-weather" id="mapWeather" onclick="toggleMapWeather()" title="点击折叠/展开">
@@ -1229,6 +1272,9 @@
                 </div>
                 <div class="mw-src">🌤️ 实况 · <span id="mwSource">加载中…</span></div>
             </div>
+            <button class="map-restore" id="mapRestoreBtn" onclick="toggleMapExpand()" title="恢复右侧选项栏（Esc / F 键同样可切换）">
+                <span>⤢</span><span>恢复侧边栏</span>
+            </button>
             <div class="map-container">
                 <div id="map"></div>
             </div>
@@ -2649,92 +2695,54 @@
             if (startInput) { startInput.placeholder = '选择进山日期'; }
         })();
 
-        /* ---------- 地图全屏（原生 Fullscreen API + iOS 降级） ---------- */
+        /* ---------- 地图展开（页面内铺满 + 收起右侧栏 + 苹果动画） ---------- */
         function mapSectionEl() { return document.querySelector('.map-section'); }
+        function mapContainerEl() { return document.querySelector('.main-container'); }
 
-        function isMapFullscreen() {
-            const sec = mapSectionEl();
-            if (!sec) return false;
-            return !!(document.fullscreenElement || document.webkitFullscreenElement) ||
-                   sec.classList.contains('pseudo-fs');
+        function isMapExpanded() {
+            const c = mapContainerEl();
+            return !!c && c.classList.contains('map-expanded');
         }
 
         function syncFsUI() {
-            const sec = mapSectionEl();
+            const on = isMapExpanded();
             const btn = document.getElementById('fsBtn');
             const ico = document.getElementById('fsIco');
             const txt = document.getElementById('fsTxt');
-            const on = isMapFullscreen();
+            const restore = document.getElementById('mapRestoreBtn');
             if (btn) {
                 btn.classList.toggle('on', on);
-                btn.title = on ? '退出全屏（Esc / F 键）' : '全屏查看地图（Esc / F 键退出）';
+                btn.title = on ? '恢复右侧栏（Esc / F 键）' : '展开地图并收起右侧栏（Esc / F 键）';
             }
             if (ico) ico.textContent = on ? '⤢' : '⛶';
-            if (txt) txt.textContent = on ? '退出全屏' : '全屏';
+            if (txt) txt.textContent = on ? '恢复' : '展开';
+            if (restore) restore.classList.toggle('show', on);
             try { document.body.style.overflow = on ? 'hidden' : ''; } catch (e) {}
             // 容器尺寸变化后必须重算地图画布（过渡动画期间多次 resize 更稳）
             const m = window.__map;
             if (m && typeof m.resize === 'function') {
-                [60, 200, 420].forEach(delay => setTimeout(() => { try { m.resize(); } catch (e) {} }, delay));
+                [80, 250, 450, 700].forEach(delay => setTimeout(() => { try { m.resize(); } catch (e) {} }, delay));
             }
         }
 
-        function toggleMapFullscreen() {
-            const sec = mapSectionEl();
-            if (!sec) return;
-            const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-
-            if (fsEl) { // 原生全屏中 → 退出
-                const exit = document.exitFullscreen || document.webkitExitFullscreen;
-                if (exit) {
-                    const p = exit.call(document);
-                    if (p && typeof p.catch === 'function') p.catch(() => {});
-                }
-                return;
-            }
-            if (sec.classList.contains('pseudo-fs')) { // 降级全屏中 → 退出
-                sec.classList.remove('pseudo-fs');
-                syncFsUI();
-                return;
-            }
-
-            const req = sec.requestFullscreen || sec.webkitRequestFullscreen;
-            if (req) {
-                try {
-                    const p = req.call(sec);
-                    if (p && typeof p.then === 'function') {
-                        // 被拒绝（如 iPhone Safari 不支持元素全屏）→ 自动降级为固定定位铺满
-                        p.then(() => {}).catch(() => { sec.classList.add('pseudo-fs'); syncFsUI(); });
-                        return;
-                    }
-                    return;
-                } catch (e) { /* 继续降级 */ }
-            }
-            sec.classList.add('pseudo-fs');
+        function setMapExpanded(on) {
+            const c = mapContainerEl();
+            if (!c) return;
+            c.classList.toggle('map-expanded', !!on);
             syncFsUI();
         }
 
-        ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (evt) {
-            document.addEventListener(evt, function () {
-                const sec = mapSectionEl();
-                const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-                if (!fsEl && sec) sec.classList.remove('pseudo-fs');
-                syncFsUI();
-            });
-        });
+        function toggleMapExpand() {
+            setMapExpanded(!isMapExpanded());
+        }
 
-        // 快捷键：Esc 退出降级全屏；F 切换全屏
+        // 快捷键：Esc / F 切换展开
         document.addEventListener('keydown', function (e) {
             const tag = (e.target && e.target.tagName ? e.target.tagName : '').toLowerCase();
             if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
-            const sec = mapSectionEl();
-            if (e.key === 'Escape' && sec && sec.classList.contains('pseudo-fs')) {
-                sec.classList.remove('pseudo-fs');
-                syncFsUI();
-                return;
-            }
-            if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey) {
-                toggleMapFullscreen();
+            if (e.key === 'Escape' || e.key === 'f' || e.key === 'F') {
+                if (e.key === 'Escape' && !isMapExpanded()) return;
+                if (!e.metaKey && !e.ctrlKey && !e.altKey) toggleMapExpand();
             }
         });
 
