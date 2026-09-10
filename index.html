@@ -1091,6 +1091,15 @@
             border: 1px solid rgba(48,176,199,0.3);
         }
         .sched-wx .wx-note { color: var(--txt-mid); font-size: 11px; }
+        .sched-elev { margin-top: 8px; }
+        .sched-elev-cap { font-size: 11px; color: var(--txt-mid); margin-bottom: 4px; }
+        .sched-elev-canvas {
+            display: block;
+            width: 100%;
+            height: 46px;
+            border-radius: var(--r-sm);
+            background: rgba(102, 126, 234, 0.05);
+        }
 
         .g-list { display: flex; flex-direction: column; gap: 7px; }
         .g-item {
@@ -2079,40 +2088,67 @@
             const ctx = canvas.getContext('2d');
             const w = canvas.width = canvas.offsetWidth * 2;
             const h = canvas.height = canvas.offsetHeight * 2;
-            
+
             ctx.clearRect(0, 0, w, h);
-            
+
             if (elevations.length < 2) return;
-            
+
             const minElev = Math.min(...elevations.map(e => e.elevation));
             const maxElev = Math.max(...elevations.map(e => e.elevation));
             const range = maxElev - minElev || 1;
             const maxDist = Math.max(...elevations.map(e => e.distance));
-            
+
+            // 右侧预留 42px 放置 1000m 单位的海拔刻度标签
+            const padR = 42;
+            const plotW = w - padR;
+
+            /* 1000m 为单位的高度横线（虚线 + 海拔标签） */
+            const gTop = Math.floor(minElev / 1000) * 1000;   // 向下取整到千位
+            const gBot = Math.ceil(maxElev / 1000) * 1000;    // 向上取整到千位
+            ctx.font = '11px -apple-system, "PingFang SC", sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            for (let g = gTop; g <= gBot; g += 1000) {
+                // 可能有多条 1000 线落在同一屏内（如 3000/4000/5000）
+                const y = h - ((g - minElev) / range) * (h - 20);
+                if (y < 4 || y > h - 4) continue;
+                ctx.strokeStyle = 'rgba(100, 116, 139, 0.35)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 5]);
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(plotW, y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                // 海拔标签（千位缩写：4000m / 5000m）
+                ctx.fillStyle = 'rgba(100, 116, 139, 0.85)';
+                ctx.fillText((g / 1000) + '000m', w - 2, y);
+            }
+
             // 绘制填充区域
             ctx.beginPath();
             ctx.moveTo(0, h);
-            
+
             elevations.forEach((e, i) => {
-                const x = (e.distance / maxDist) * w;
+                const x = (e.distance / maxDist) * plotW;
                 const y = h - ((e.elevation - minElev) / range) * (h - 20);
                 if (i === 0) ctx.lineTo(x, y);
                 else ctx.lineTo(x, y);
             });
-            
-            ctx.lineTo(w, h);
+
+            ctx.lineTo(plotW, h);
             ctx.closePath();
-            
+
             const gradient = ctx.createLinearGradient(0, 0, 0, h);
             gradient.addColorStop(0, 'rgba(102, 126, 234, 0.6)');
             gradient.addColorStop(1, 'rgba(102, 126, 234, 0.1)');
             ctx.fillStyle = gradient;
             ctx.fill();
-            
+
             // 绘制线条
             ctx.beginPath();
             elevations.forEach((e, i) => {
-                const x = (e.distance / maxDist) * w;
+                const x = (e.distance / maxDist) * plotW;
                 const y = h - ((e.elevation - minElev) / range) * (h - 20);
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
