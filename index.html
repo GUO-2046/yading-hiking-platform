@@ -1057,6 +1057,28 @@
             .map-section { height: 55vh; min-height: 360px; }
             .header { padding: 14px 18px; }
         }
+    /* ★ 法律合规警示条（2026-09-01 亚丁管理局严禁非法穿越新规） */
+    .legal-alert{position:relative;margin:0 auto 14px;max-width:1400px;border-radius:14px;overflow:hidden;
+        background:linear-gradient(135deg,#fff1f0 0%,#ffe7e5 100%);
+        border:1px solid #ffccc7;box-shadow:0 4px 16px rgba(255,77,79,.10);}
+    .legal-alert.la-collapsed .la-body{display:none}
+    .la-head{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;user-select:none}
+    .la-badge{flex-shrink:0;background:#ff4d4f;color:#fff;font-size:12px;font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.5px}
+    .la-title{font-size:14.5px;font-weight:700;color:#a8071a;flex:1;line-height:1.5}
+    .la-title em{font-style:normal;color:#cf1322}
+    .la-toggle{flex-shrink:0;font-size:12px;color:#cf1322;background:rgba(255,77,79,.10);padding:4px 10px;border-radius:20px;white-space:nowrap}
+    .la-close{position:absolute;top:8px;right:10px;background:none;border:none;font-size:18px;color:#cf1322;opacity:.5;cursor:pointer;line-height:1;padding:2px 6px}
+    .la-close:hover{opacity:1}
+    .la-body{padding:0 16px 14px;font-size:13px;color:#5c0011;line-height:1.75}
+    .la-body b{color:#a8071a}
+    .la-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin:10px 0}
+    .la-card{background:rgba(255,255,255,.75);border:1px solid #ffccc7;border-radius:10px;padding:10px 12px}
+    .la-card h4{margin:0 0 6px;font-size:13px;color:#a8071a;display:flex;align-items:center;gap:6px}
+    .la-card ul{margin:0;padding-left:18px}
+    .la-card li{margin:3px 0;font-size:12.5px}
+    .la-src{margin-top:10px;padding-top:9px;border-top:1px dashed #ffccc7;font-size:11.5px;color:#8c1d18;opacity:.85}
+    .la-src a{color:#a8071a;text-decoration:underline}
+    @media(max-width:640px){.la-title{font-size:13px}.la-badge{font-size:11px}.la-body{font-size:12.5px}}
     </style>
 </head>
 <body>
@@ -1080,6 +1102,63 @@
             </a>
         </div>
     </div>
+
+    <!-- ★ 法律合规警示条：2026-09-01 亚丁国家级自然保护区管理局「严禁非法穿越」公告 -->
+    <div class="legal-alert la-collapsed" id="legalAlert">
+        <button class="la-close" onclick="dismissLegalAlert(event)" title="今日不再提示">×</button>
+        <div class="la-head" onclick="toggleLegalAlert()">
+            <span class="la-badge">高风险</span>
+            <span class="la-title">2026-09-01 亚丁管理局新规：<em>严禁非法穿越</em> —— 大转山属未开发管控区域，最高罚 10 万元、可终身禁入，救援费用需自付</span>
+            <span class="la-toggle" id="laToggle">展开详情 ▾</span>
+        </div>
+        <div class="la-body">
+            <div>管理局公告明确：核心保护区禁止一切人为活动；一般控制区<strong>未经审批严禁穿越、徒步、探险、露营</strong>。除景区正式开放游览线路外，其余山林、河谷、野路均属管控区域。亚丁大转山所经的波拥措、贡嘎扎则、万花池、新果牛场、蛇湖、卡斯等营地均在景区经营区之外，按此口径属于「非法穿越」。</div>
+            <div class="la-grid">
+                <div class="la-card">
+                    <h4>⚖️ 处罚</h4>
+                    <ul>
+                        <li>情节严重可<strong>限期或终身限制进入亚丁景区</strong></li>
+                        <li>核心保护区违规最高罚 <strong>10 万元</strong></li>
+                        <li>造成生态破坏最高罚 <strong>500 万元</strong> + 生态修复赔偿</li>
+                        <li>组织者、带路向导、网传路线者<strong>从重处罚</strong></li>
+                        <li>动用公共救援将<strong>依法追偿救援费用</strong></li>
+                    </ul>
+                </div>
+                <div class="la-card">
+                    <h4>🧭 现实与建议</h4>
+                    <ul>
+                        <li>截至 2026-09 仍有俱乐部发布 10 月团期，但官方口径已明显收紧</li>
+                        <li>出发前致电 <strong>0836-6966022</strong> 确认能否报备 / 审批</li>
+                        <li>优先选当地有资质俱乐部，避免网招组队与私自带路</li>
+                        <li>购买覆盖高海拔探险的保险，注意免责条款是否排除「违规穿越」</li>
+                        <li>备好替代方案：改走景区正规长线（金刚挑战线）+ 短线组合</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="la-src">
+                核实时间 2026-09-10 · 来源：<a href="https://cn.yadingtour.com/e-news/notice/1009-2026-09-01-10-33-47" target="_blank" rel="noopener">亚丁国家级自然保护区管理局《关于严禁非法穿越保护区的公告》</a>。政策变动频繁，出行前请以官方最新公告为准。
+            </div>
+        </div>
+    </div>
+    <script>
+    (function () {
+        var KEY = 'yading_legal_alert_date';
+        var box = document.getElementById('legalAlert');
+        if (!box) return;
+        var today = new Date().toISOString().slice(0, 10);
+        try { if (localStorage.getItem(KEY) === today) { box.style.display = 'none'; } } catch (e) {}
+        window.toggleLegalAlert = function () {
+            box.classList.toggle('la-collapsed');
+            var t = document.getElementById('laToggle');
+            if (t) t.textContent = box.classList.contains('la-collapsed') ? '展开详情 ▾' : '收起 ▴';
+        };
+        window.dismissLegalAlert = function (ev) {
+            ev.stopPropagation();
+            try { localStorage.setItem(KEY, today); } catch (e) {}
+            box.style.display = 'none';
+        };
+    })();
+    </script>
 
     <div class="main-container">
         <div class="map-section">
