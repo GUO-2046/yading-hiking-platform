@@ -200,6 +200,45 @@
         .map-container { width: 100%; height: 100%; }
         #map { width: 100%; height: 100%; }
 
+        /* ---------- 地图全屏 ---------- */
+        .map-section:fullscreen {
+            width: 100vw;
+            height: 100vh;
+            max-width: none;
+            border-radius: 0;
+            box-shadow: none;
+        }
+        .map-section:-webkit-full-screen {
+            width: 100vw;
+            height: 100vh;
+            max-width: none;
+            border-radius: 0;
+            box-shadow: none;
+        }
+        /* 不支持 Fullscreen API 时的降级（如 iPhone Safari）：固定定位铺满 */
+        .map-section.pseudo-fs {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            z-index: 9999;
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: none;
+            border-radius: 0;
+            box-shadow: none;
+        }
+        .map-section.pseudo-fs .map-overlay { max-width: calc(100% - 32px); }
+        .fs-btn { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+        .fs-btn.on {
+            background: linear-gradient(135deg, rgba(10, 132, 255, 0.95), rgba(94, 92, 230, 0.95));
+            border-color: rgba(255, 255, 255, 0.6);
+            color: #fff;
+            box-shadow: var(--shadow-glow-blue);
+        }
+        .fs-btn .fs-ico { font-size: 14px; line-height: 1; }
+
         .map-overlay {
             position: absolute;
             top: 16px;
@@ -1171,6 +1210,9 @@
                     <button class="vsw-btn on" data-v="3d" onclick="setViewMode('3d', this)">⛰️ 3D</button>
                     <button class="vsw-btn" data-v="2d" onclick="setViewMode('2d', this)">🗺️ 2D</button>
                 </span>
+                <button class="style-btn fs-btn" id="fsBtn" onclick="toggleMapFullscreen()" title="全屏查看地图（Esc / F 键退出）">
+                    <span class="fs-ico" id="fsIco">⛶</span><span id="fsTxt">全屏</span>
+                </button>
             </div>
             <div class="map-weather" id="mapWeather" onclick="toggleMapWeather()" title="点击折叠/展开">
                 <div class="mw-head">
@@ -2606,6 +2648,95 @@
             // 默认空日期，用户自行选择；提供快捷"示例"提示
             if (startInput) { startInput.placeholder = '选择进山日期'; }
         })();
+
+        /* ---------- 地图全屏（原生 Fullscreen API + iOS 降级） ---------- */
+        function mapSectionEl() { return document.querySelector('.map-section'); }
+
+        function isMapFullscreen() {
+            const sec = mapSectionEl();
+            if (!sec) return false;
+            return !!(document.fullscreenElement || document.webkitFullscreenElement) ||
+                   sec.classList.contains('pseudo-fs');
+        }
+
+        function syncFsUI() {
+            const sec = mapSectionEl();
+            const btn = document.getElementById('fsBtn');
+            const ico = document.getElementById('fsIco');
+            const txt = document.getElementById('fsTxt');
+            const on = isMapFullscreen();
+            if (btn) {
+                btn.classList.toggle('on', on);
+                btn.title = on ? '退出全屏（Esc / F 键）' : '全屏查看地图（Esc / F 键退出）';
+            }
+            if (ico) ico.textContent = on ? '⤢' : '⛶';
+            if (txt) txt.textContent = on ? '退出全屏' : '全屏';
+            try { document.body.style.overflow = on ? 'hidden' : ''; } catch (e) {}
+            // 容器尺寸变化后必须重算地图画布（过渡动画期间多次 resize 更稳）
+            const m = window.__map;
+            if (m && typeof m.resize === 'function') {
+                [60, 200, 420].forEach(delay => setTimeout(() => { try { m.resize(); } catch (e) {} }, delay));
+            }
+        }
+
+        function toggleMapFullscreen() {
+            const sec = mapSectionEl();
+            if (!sec) return;
+            const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+
+            if (fsEl) { // 原生全屏中 → 退出
+                const exit = document.exitFullscreen || document.webkitExitFullscreen;
+                if (exit) {
+                    const p = exit.call(document);
+                    if (p && typeof p.catch === 'function') p.catch(() => {});
+                }
+                return;
+            }
+            if (sec.classList.contains('pseudo-fs')) { // 降级全屏中 → 退出
+                sec.classList.remove('pseudo-fs');
+                syncFsUI();
+                return;
+            }
+
+            const req = sec.requestFullscreen || sec.webkitRequestFullscreen;
+            if (req) {
+                try {
+                    const p = req.call(sec);
+                    if (p && typeof p.then === 'function') {
+                        // 被拒绝（如 iPhone Safari 不支持元素全屏）→ 自动降级为固定定位铺满
+                        p.then(() => {}).catch(() => { sec.classList.add('pseudo-fs'); syncFsUI(); });
+                        return;
+                    }
+                    return;
+                } catch (e) { /* 继续降级 */ }
+            }
+            sec.classList.add('pseudo-fs');
+            syncFsUI();
+        }
+
+        ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (evt) {
+            document.addEventListener(evt, function () {
+                const sec = mapSectionEl();
+                const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+                if (!fsEl && sec) sec.classList.remove('pseudo-fs');
+                syncFsUI();
+            });
+        });
+
+        // 快捷键：Esc 退出降级全屏；F 切换全屏
+        document.addEventListener('keydown', function (e) {
+            const tag = (e.target && e.target.tagName ? e.target.tagName : '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+            const sec = mapSectionEl();
+            if (e.key === 'Escape' && sec && sec.classList.contains('pseudo-fs')) {
+                sec.classList.remove('pseudo-fs');
+                syncFsUI();
+                return;
+            }
+            if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                toggleMapFullscreen();
+            }
+        });
 
         function resetCalendar() {
             document.getElementById('calStartDate').value = '';
