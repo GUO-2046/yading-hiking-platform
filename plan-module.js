@@ -504,6 +504,99 @@
     else map.once('load', ready);
   };
 
+  /* ---------- 微型高程剖面（单日行程卡片） ---------- */
+  /* 部分轨迹段(5 天版 seg5_pts)的点只有 [lon,lat] 无海拔，用主轨迹(7 天版 segments，全部带海拔)
+     做最近邻匹配补齐；匹配不到的点按相邻已匹配点线性插值 */
+  function ensureAlt(pts) {
+    if (!pts || !pts.length) return pts;
+    // 已有海拔的点直接返回
+    if (pts.every(p => Array.isArray(p) && typeof p[2] === 'number' && !isNaN(p[2]))) return pts;
+    // 构建主轨迹海拔查找表（经纬度 → 海拔）
+    const T = global.YD_TRACK;
+    const altPool = [];
+    if (T) {
+      (T.segments || []).forEach(seg => seg.forEach(p => { if (p.length >= 3 && typeof p[2] === 'number') altPool.push(p); }));
+    }
+    if (!altPool.length) return pts.filter(p => Array.isArray(p) && typeof p[2] === 'number');
+    const findAlt = (lon, lat) => {
+      let best = null, bestD = 1e9;
+      for (const p of altPool) {
+        const dl = p[0] - lon, dt = p[1] - lat;
+        const d = dl * dl + dt * dt;
+        if (d < bestD) { bestD = d; best = p[2]; }
+      }
+      return bestD < 1e-9 ? best : null;   // 只接受几乎同一点
+    };
+    const out = pts.map(p => {
+      if (!Array.isArray(p)) return null;
+      const lon = p[0], lat = p[1];
+      let alt = (typeof p[2] === 'number' && !isNaN(p[2])) ? p[2] : findAlt(lon, lat);
+      if (alt === null) alt = NaN;   // 待插值标记
+      return [lon, lat, alt];
+    });
+    // 线性插值填补 NaN 点：用左右最近有效点插值
+    for (let i = 0; i < out.length; i++) {
+      if (!out[i] || !isNaN(out[i][2])) continue;
+      let pv = null, pvi = -1, nx = null, nxi = -1;
+      for (let j = i - 1; j >= 0; j--) { if (out[j] && !isNaN(out[j][2])) { pv = out[j][2]; pvi = j; break; } }
+      for (let j = i + 1; j < out.length; j++) { if (out[j] && !isNaN(out[j][2])) { nx = out[j][2]; nxi = j; break; } }
+      if (pv !== null && nx !== null && nxi > pvi) {
+        out[i][2] = pv + (nx - pv) * ((i - pvi) / (nxi - pvi));
+      } else if (pv !== null) out[i][2] = pv;
+      else if (nx !== null) out[i][2] = nx;
+      else out[i][2] = 0;
+    }
+    return out.filter(Boolean);
+  }
+
+  function drawMiniElevation(canvas, rawPts) {
+    if (!canvas || !rawPts || rawPts.length < 2) return;
+    const pts = ensureAlt(rawPts);
+    if (!pts || pts.length < 2) return;
+    if (pts.some(p => typeof p[2] !== 'number' || isNaN(p[2]))) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width = canvas.offsetWidth * 2 || 600;
+    const h = canvas.height = canvas.offsetHeight * 2 || 96;
+    ctx.clearRect(0, 0, w, h);
+
+    const minE = Math.min(...pts.map(p => p[2]));
+    const maxE = Math.max(...pts.map(p => p[2]));
+    const range = maxE - minE || 1;
+    const plotW = w - 8, plotH = h - 8;   // 上下各留 4px
+    const X = i => 4 + (i / (pts.length - 1)) * plotW;
+    const Y = e => 4 + (1 - (e - minE) / range) * plotH;
+
+    // 填充色带
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, 'rgba(102, 126, 234, 0.35)');
+    grad.addColorStop(1, 'rgba(102, 126, 234, 0.05)');
+    ctx.beginPath();
+    ctx.moveTo(X(0), h);
+    pts.forEach((p, i) => { ctx.lineTo(X(i), Y(p[2])); });
+    ctx.lineTo(X(pts.length - 1), h);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // 剖面线
+    ctx.beginPath();
+    pts.forEach((p, i) => { i === 0 ? ctx.moveTo(X(i), Y(p[2])) : ctx.lineTo(X(i), Y(p[2])); });
+    ctx.strokeStyle = '#667eea';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // 起点/终点海拔标签（小字，端点不重叠时显示）
+    ctx.font = '9px -apple-system, "PingFang SC", sans-serif';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = 'rgba(100, 116, 139, 0.9)';
+    ctx.textAlign = 'left';
+    ctx.fillText(Math.round(minE) + 'm', 4, Y(pts[0][2]) - 2);
+    ctx.textAlign = 'right';
+    const lastX = X(pts.length - 1);
+    ctx.fillText(Math.round(pts[pts.length - 1][2]) + 'm', Math.min(lastX + 2, w - 2), Y(pts[pts.length - 1][2]) - 2);
+  }
+
   /* ---------- 渲染 ---------- */
   function el(tag, cls, html) {
     const e = document.createElement(tag);
@@ -588,6 +681,9 @@
       pickerBox.appendChild(picker);
       schedBody.appendChild(pickerBox);
 
+      // 徒步日计数器：schedule 中的交通/适应日(如 7/8 天版 D1)不消耗轨迹段，
+      // 5 天版 D1 即徒步日，因此必须按「是否为徒步日」对齐而非固定索引
+      let segCursor = 0;
       plan.schedule.forEach((d, i) => {
         const item = el('div', 'sched-item');
         const top = el('div', 'sched-top');
@@ -625,6 +721,24 @@
           wx.appendChild(tag);
           wx.appendChild(note);
           item.appendChild(wx);
+        }
+
+        /* 该日高程剖面：按「徒步日」与 trackSegs 对齐（交通/适应日跳过，不消耗轨迹段） */
+        const isHikeDay = d.dist && d.dist !== '—';
+        const seg = (isHikeDay && trackSegs) ? trackSegs[segCursor] : null;
+        if (isHikeDay) segCursor++;
+        if (seg && seg.pts && seg.pts.length >= 2) {
+          const ep = el('div', 'sched-elev');
+          // cap 用补齐海拔后的数据（5 天版 seg5_pts 无海拔，须 ensureAlt）
+          const epts = ensureAlt(seg.pts);
+          const emin = epts && epts.length ? Math.round(Math.min(...epts.map(p => p[2]))) : null;
+          const emax = epts && epts.length ? Math.round(Math.max(...epts.map(p => p[2]))) : null;
+          const cap = el('div', 'sched-elev-cap', `⛰️ 当日剖面 ${emin}m — ${emax}m · ${seg.stats?.d_km ?? ''}km`);
+          const cv = el('canvas', 'sched-elev-canvas');
+          ep.appendChild(cap);
+          ep.appendChild(cv);
+          item.appendChild(ep);
+          requestAnimationFrame(() => drawMiniElevation(cv, seg.pts));
         }
 
         if (d.note) item.appendChild(el('div', 'sched-note', '💡 ' + d.note));
