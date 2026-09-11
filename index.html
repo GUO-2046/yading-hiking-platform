@@ -1664,62 +1664,112 @@
             street: 'https://api.maptiler.com/maps/streets/style.json?key=get_your_own_key'
         };
         
-        // 免费可达瓦片源（opentopomap/openstreetmap 在国内不可达，改用 Esri/腾讯/高德）
+        // 免费可达瓦片源 ★ 2026-09-12 换高德全家桶（清晰 + 快 3.5×，国内 CDN ~280ms）
+        // ⚠️ 高德/腾讯瓦片为 GCJ-02 坐标系：所有 WGS84 数据入图前必须经 wgs84ToGcj02 转换
+        // 瓦片子域多点并发：
+        //   webst01-04 = 影像域（style=6 卫星影像；style=8 透明注记层，99.6% 透明+中文注记，可叠影像）
+        //   webrd01-04 = 矢量域（style=8 路网+地形色+注记，米色底，做街道/地形图）
+        // ⚠️ 实测：矢量域必须带 lang=zh_cn（否则 404）；影像域注记层 style=8 无需参数
+        const AMAP_TILE_DOMAINS = ['webst01', 'webst02', 'webst03', 'webst04'];
+        const AMAP_RD_DOMAINS = ['webrd01', 'webrd02', 'webrd03', 'webrd04'];
+        const AMAP_SAT_TILES = AMAP_TILE_DOMAINS.map(d => 'https://' + d + '.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}');
+        const AMAP_LABEL_TILES = AMAP_TILE_DOMAINS.map(d => 'https://' + d + '.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}');
+        const AMAP_ROAD_TILES = AMAP_RD_DOMAINS.map(d => 'https://' + d + '.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}');
+
         const FREE_STYLES = {
-            // 地形图：Esri World_Topo_Map（等高线+地貌着色，国内可达）
+            // 地形路线图：高德矢量底图（含等高线地形色 + 中文注记）
             outdoor: {
                 version: 8,
                 sources: {
-                    'esri-topo': {
+                    'amap-road': {
                         type: 'raster',
-                        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}'],
+                        tiles: AMAP_ROAD_TILES,
                         tileSize: 256,
                         maxzoom: 18,
-                        attribution: '© Esri'
+                        attribution: '© 高德地图'
                     }
                 },
                 layers: [
-                    { id: 'esri-topo', type: 'raster', source: 'esri-topo', minzoom: 0, maxzoom: 18 }
+                    { id: 'amap-road', type: 'raster', source: 'amap-road', minzoom: 0, maxzoom: 18 }
                 ]
             },
+            // 卫星图：高德影像 + 高德中文注记叠加（双 raster 源）
             satellite: {
                 version: 8,
                 sources: {
-                    'esri-sat': {
+                    'amap-sat': {
                         type: 'raster',
-                        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+                        tiles: AMAP_SAT_TILES,
                         tileSize: 256,
                         maxzoom: 18,
-                        attribution: '© Esri'
+                        attribution: '© 高德地图'
+                    },
+                    'amap-label': {
+                        type: 'raster',
+                        tiles: AMAP_LABEL_TILES,
+                        tileSize: 256,
+                        maxzoom: 18,
+                        attribution: '© 高德地图'
                     }
                 },
                 layers: [
-                    { id: 'esri-sat', type: 'raster', source: 'esri-sat', minzoom: 0, maxzoom: 18 }
+                    { id: 'amap-sat', type: 'raster', source: 'amap-sat', minzoom: 0, maxzoom: 18 },
+                    { id: 'amap-label', type: 'raster', source: 'amap-label', minzoom: 0, maxzoom: 18 }
                 ]
             },
+            // 街道/路网图：高德矢量（备用，未在 UI 暴露）
             street: {
                 version: 8,
                 sources: {
-                    'tencent-street': {
+                    'amap-road': {
                         type: 'raster',
-                        tiles: ['https://rt0.map.gtimg.com/tile?z={z}&x={x}&y={y}&styleid=1'],
+                        tiles: AMAP_ROAD_TILES,
                         tileSize: 256,
                         maxzoom: 18,
-                        attribution: '© 腾讯地图'
+                        attribution: '© 高德地图'
                     }
                 },
                 layers: [
-                    { id: 'tencent-street', type: 'raster', source: 'tencent-street', minzoom: 0, maxzoom: 18 }
+                    { id: 'amap-road', type: 'raster', source: 'amap-road', minzoom: 0, maxzoom: 18 }
                 ]
             }
         };
 
-        // 初始化地图（默认卫星图——需求：默认卫星图）
+        /* ---------- GCJ-02 适配（2026-09-12）----------
+           高德瓦片为 GCJ-02，而 KML/GPX/内置轨迹均为 WGS84 →
+           所有数据入图前必须转 GCJ-02，否则轨迹与底图偏移 ~300m。
+           复用 yading-engine 的 wgs84ToGcj02，缺失时降级为原样返回（页面不死）。 */
+        const GCJ = (window.YadingEngine && window.YadingEngine.wgs84ToGcj02)
+            || function (lon, lat) { return { lon: lon, lat: lat }; };
+        function gcjPair(c) {
+            const g = GCJ(c[0], c[1]);
+            return c.length > 2 ? [g.lon, g.lat, c[2]] : [g.lon, g.lat];
+        }
+        function gcjGeom(geometry) {
+            if (!geometry) return geometry;
+            const t = geometry.type;
+            if (t === 'Point') return Object.assign({}, geometry, { coordinates: gcjPair(geometry.coordinates) });
+            if (t === 'MultiPoint') return Object.assign({}, geometry, { coordinates: geometry.coordinates.map(gcjPair) });
+            if (t === 'LineString') return Object.assign({}, geometry, { coordinates: geometry.coordinates.map(gcjPair) });
+            if (t === 'MultiLineString') return Object.assign({}, geometry, { coordinates: geometry.coordinates.map(line => line.map(gcjPair)) });
+            if (t === 'Polygon') return Object.assign({}, geometry, { coordinates: geometry.coordinates.map(ring => ring.map(gcjPair)) });
+            if (t === 'MultiPolygon') return Object.assign({}, geometry, { coordinates: geometry.coordinates.map(poly => poly.map(ring => ring.map(gcjPair))) });
+            if (t === 'GeometryCollection') return Object.assign({}, geometry, { geometries: geometry.geometries.map(gcjGeom) });
+            return geometry;
+        }
+        function gcjGeojson(geojson) {
+            return Object.assign({}, geojson, {
+                features: (geojson.features || []).map(f => Object.assign({}, f, { geometry: gcjGeom(f.geometry) }))
+            });
+        }
+
+        // 初始化地图（默认卫星图——需求：默认卫星图）★ 中心点 WGS84 → GCJ
         const DEFAULT_STYLE = 'satellite';
+        const __mapCenter = GCJ(100.3154, 28.5396); // 稻城亚丁游客中心
         const map = new maplibregl.Map({
             container: 'map',
             style: FREE_STYLES[DEFAULT_STYLE],
-            center: [100.3154, 28.5396], // 稻城亚丁游客中心
+            center: [__mapCenter.lon, __mapCenter.lat],
             zoom: 11,
             pitch: 45,
             bearing: 0,
@@ -1979,11 +2029,14 @@
             const routeId = 'route-' + routeCount;
             const color = getRandomColor();
             
-            // 保存轨迹数据
-            routeData.push({ id: routeId, geojson, color });
+            // ★ GCJ-02 适配：底图（高德）为 GCJ-02，轨迹须转 GCJ 后入图。
+            // routeData 保存转换后版本（reapplyAfterStyle 重建时直接复用），
+            // 统计/列表仍用原始 WGS84，避免里程与海拔数据被偏移污染。
+            const gcjData = gcjGeojson(geojson);
+            routeData.push({ id: routeId, geojson: gcjData, color });
             
-            // 处理各种要素类型
-            geojson.features.forEach((feature, idx) => {
+            // 处理各种要素类型（用 GCJ 版本渲染）
+            gcjData.features.forEach((feature, idx) => {
                 const g = feature.geometry;
                 // 收集本要素内所有线段（支持 LineString/MultiLineString/GeometryCollection 展开）
                 const lines = [];
@@ -2001,13 +2054,10 @@
                 // 添加轨迹线
                 if (lines.length) {
                     addRouteLayers(routeId, { features: [feature] }, color, idx);
-                    // 计算统计数据（合并所有线段坐标）
-                    const allCoords = lines.flatMap(l => l.coordinates);
-                    calculateStats(allCoords, color, filename);
                     // 飞入动画（仅首要素触发，避免多段重复抢视角）
                     if (idx === 0) {
                         map.flyTo({
-                            center: allCoords[0],
+                            center: lines[0].coordinates[0],
                             zoom: 13,
                             pitch: 45,
                             duration: 2000
@@ -2060,6 +2110,25 @@
                     // 统一由下方 document 级委托处理（.popup-media 的 click / img error）
                 });
             });
+            
+            // ★ 统计用原始 WGS84 坐标（底图已切 GCJ，但里程/海拔统计必须基于真实坐标，避免偏移污染）
+            const rawCoordsAll = [];
+            geojson.features.forEach((feature) => {
+                const g = feature.geometry;
+                const rawLines = [];
+                if (g && g.type === 'LineString') rawLines.push(g);
+                else if (g && g.type === 'MultiLineString') g.coordinates.forEach(c => rawLines.push({ type: 'LineString', coordinates: c }));
+                else if (g && g.type === 'GeometryCollection') {
+                    (g.geometries || []).forEach(sub => {
+                        if (sub.type === 'LineString' || sub.type === 'MultiLineString') {
+                            if (sub.type === 'MultiLineString') sub.coordinates.forEach(c => rawLines.push({ type: 'LineString', coordinates: c }));
+                            else rawLines.push(sub);
+                        }
+                    });
+                }
+                rawLines.forEach(l => { if (l.coordinates) rawCoordsAll.push(...l.coordinates); });
+            });
+            if (rawCoordsAll.length) calculateStats(rawCoordsAll, color, filename);
             
             // 更新列表
             updateRouteList(filename, geojson);
