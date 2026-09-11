@@ -595,6 +595,234 @@ function scheduleByInput({ days, experience, load }) {
   return { sched, notes };
 }
 
+/* ---------- ★★★ 难度评分（TrailScope 思路移植，MIT 可抄）+ 风险评分（确定性加权模型） ---------- */
+
+/* 解析 '7-9km' → 8（取区间中值）；'—'/'13km' → 处理 */
+function parseDistKm(s) {
+  if (!s || s === '—') return null;
+  const m = s.match(/(\d+(?:\.\d+)?)\s*(?:-|~|至)\s*(\d+(?:\.\d+)?)/);
+  if (m) return (Number(m[1]) + Number(m[2])) / 2;
+  const n = s.match(/(\d+(?:\.\d+)?)/);
+  return n ? Number(n[1]) : null;
+}
+
+/* 解析爬升 '+300~370/-900~1000m' → 370（取 + 方向的最大值）；'+800m' → 800 */
+function parseClimbUp(s) {
+  if (!s || s === '—') return 0;
+  const plusses = s.match(/\+\s*(\d+)/g);
+  if (!plusses) return 0;
+  let maxV = 0;
+  plusses.forEach(p => {
+    const v = parseInt(p.replace(/[^0-9]/g, ''), 10);
+    if (v > maxV) maxV = v;
+  });
+  return maxV;
+}
+
+/* 行程强度汇总：徒步天数 / 总里程 / 日均里程 / 日均爬升 / 最高海拔 */
+function assembleTrailStats(sched) {
+  const hikeDays = sched.filter(d => parseDistKm(d.dist) !== null);
+  const n = hikeDays.length || 1;
+  const totalKm = hikeDays.reduce((s, d) => s + (parseDistKm(d.dist) || 0), 0);
+  const totalClimb = hikeDays.reduce((s, d) => s + parseClimbUp(d.climb), 0);
+  return {
+    n,
+    totalKm: Math.round(totalKm),
+    totalClimb: Math.round(totalClimb),
+    dailyKm: +(totalKm / n).toFixed(1),
+    dailyClimb: Math.round(totalClimb / n),
+    maxAlt: 5036, // 措该达垭口（路线固定）
+  };
+}
+
+/* 难度评分 0-100：距离强度32 + 爬升强度32 + 海拔20 + 背负16，再按紧凑度（天数越少越难）修正 */
+function difficultyScore(opts) {
+  const sched = opts.sched || [];
+  const load = opts.load || 'heavy';
+  const stats = assembleTrailStats(sched);
+  // 距离强度：日均 15km 满分
+  const dPts = Math.min(stats.dailyKm / 15, 1) * 32;
+  // 爬升强度：日均 900m 满分
+  const cPts = Math.min(stats.dailyClimb / 900, 1) * 32;
+  // 海拔强度：4800m+ 满分（3000m 起算）
+  const aPts = Math.min(Math.max(stats.maxAlt - 3000, 0) / 1800, 1) * 20;
+  // 背负：重装 16 / 轻装（马帮驮包）6
+  const lPts = load === 'heavy' ? 16 : 6;
+  // 天数紧凑度：徒步天数越少，连续高负荷日越多，难度上浮（5天 +18，8天 +0）
+  const compact = Math.max((8 - stats.n) * 6, 0);
+  const raw = dPts + cPts + aPts + lPts + compact;
+  const score = Math.min(100, Math.round(raw));
+  let levelKey, levelLabel;
+  if (score >= 85) { levelKey = 'Bomber'; levelLabel = '爆表级'; }
+  else if (score >= 78) { levelKey = 'Expert'; levelLabel = '专家级'; }
+  else if (score >= 62) { levelKey = 'Hard'; levelLabel = '高强度'; }
+  else if (score >= 42) { levelKey = 'Moderate'; levelLabel = '中等强度'; }
+  else { levelKey = 'Casual'; levelLabel = '休闲级'; }
+  return {
+    score, levelKey, levelLabel,
+    nums: stats,
+    dims: [
+      { k: '日均里程', v: +dPts.toFixed(1), max: 32, note: `${stats.dailyKm} km/天（共${stats.n}徒步日 · 全程${stats.totalKm}km）`, pct: +((dPts / 32) * 100).toFixed(0) },
+      { k: '日均爬升', v: +cPts.toFixed(1), max: 32, note: `${stats.dailyClimb} m/天（累计约${stats.totalClimb}m）`, pct: +((cPts / 32) * 100).toFixed(0) },
+      { k: '海拔压力', v: +aPts.toFixed(1), max: 20, note: `最高垭口 ${stats.maxAlt}m，营地最高约 4750m`, pct: +((aPts / 20) * 100).toFixed(0) },
+      { k: load === 'heavy' ? '重装背负' : '轻装/马帮', v: +lPts.toFixed(0), max: 16, note: load === 'heavy' ? '完整重装：帐篷/睡袋/炊具自背' : '轻装或雇马驮包，背负压力小', pct: +((lPts / 16) * 100).toFixed(0) },
+    ],
+    compact: compact,
+    summary: `${levelLabel}：${stats.totalKm}km 重装${load === 'heavy' ? '' : '轻装'}长线，日均 ${stats.dailyKm}km / ${stats.dailyClimb}m 爬升，最高垭口 ${stats.maxAlt}m。${score >= 85 ? '这是全中国强度最高的重装穿越线路之一，只推荐有高原徒步经验的队员' : score >= 62 ? '强度显著高于普通徒步，需要良好体能储备与高原适应' : ''}`,
+  };
+}
+
+/* 风险评分 0-100：降水20 + 降雪低温25 + 高反25 + 单日体力20 + 经验修正 + 连续高海拔，三档分级 */
+function riskScore(opts) {
+  const sched = opts.sched || [];
+  const month = Number(opts.month) || 10;
+  const load = opts.load || 'heavy';
+  const exp = opts.experience || 'medium';
+  const stats = assembleTrailStats(sched);
+  const maxAlt = stats.maxAlt;
+
+  /* 1. 降水风险 0-20（参考近5年气候统计） */
+  const rainMap = { 9: 17, 10: 15, 11: 10 };
+  const rainPts = month >= 5 && month <= 8 ? 18 : (rainMap[month] ?? 8);
+
+  /* 2. 降雪/低温风险 0-25（4800m 垭口 10 月约 37% 天数降雪，夜间 -5.9℃） */
+  let snowPts = 19;
+  if (month === 11) snowPts = 23;
+  else if (month === 9) snowPts = 14;
+  else if (month >= 12 || month <= 2) snowPts = 25;
+  else if (month >= 5 && month <= 8) snowPts = 12;
+
+  /* 3. 高反风险 0-25：最高 5036m + 连续 4000m+ 营地 */
+  const altPts = Math.min(25, Math.max(12, 12 + Math.max(maxAlt - 4200, 0) / 1600 * 13));
+
+  /* 4. 单日体力/时长 0-20：日均 13km 满分 */
+  const bodyPts = Math.min(stats.dailyKm / 13, 1) * 20;
+
+  /* 5. 连续高海拔日修正：徒步日数 ≥5 且营地都在 4000m+，失温/恢复不足风险累积 */
+  const streakPts = stats.n >= 5 ? 7 : stats.n >= 3 ? 4 : 2;
+
+  /* 6. 经验修正 */
+  const expPts = exp === 'beginner' ? 8 : exp === 'pro' ? -6 : 0;
+
+  /* 7. 负重修正：重装 +2（同样天气下重装失温/疲劳风险更高） */
+  const loadPts = load === 'heavy' ? 2 : 0;
+
+  const raw = rainPts + snowPts + altPts + bodyPts + streakPts + expPts + loadPts;
+  const score = Math.min(100, Math.max(5, Math.round(raw)));
+  let levelKey, levelLabel, advice;
+  if (score >= 75) { levelKey = 'extreme'; levelLabel = '极高风险'; advice = '天气/海拔/强度三重压力叠加。强烈建议：出发前致电亚管局 0836-6966022 确认报备；随队配备血氧仪+应急氧；每个垭口控制在 12:00 前通过，午后天气多变立即下撤；冰爪雪套必带；恶化征兆（意识模糊/剧烈头痛不缓解）当晚即评估下撤。'; }
+  else if (score >= 60) { levelKey = 'high'; levelLabel = '高风险'; advice = '海拔与天气风险明显。严格执行「白天过垭口、午后不上山」原则；带足保暖层与应急食品；预留 1 天机动缓冲；同行两人一组互相监测高反症状。'; }
+  else if (score >= 40) { levelKey = 'mid'; levelLabel = '中等风险'; advice = '整体可控但有明确风险点。按清单逐项准备（冰爪/雪套/保暖/净水），关注短期天气预报，遇恶劣天气可拆日休整。'; }
+  else { levelKey = 'low'; levelLabel = '较低风险'; advice = '相对温和窗口，仍建议保持基本高山安全习惯：结伴、不夜行、留充足进退时间。'; }
+
+  return {
+    score, levelKey, levelLabel, month, advice,
+    dims: [
+      { k: '降水', v: rainPts, max: 20, note: month === 10 ? '10月约 40% 天数有降水' : `${month}月季节性降水评估`, pct: +((rainPts / 20) * 100).toFixed(0) },
+      { k: '降雪/低温', v: snowPts, max: 25, note: month === 10 ? '4800m 垭口 37% 天数降雪 · 夜 -5.9℃' : `${month}月垭口低温降雪评估`, pct: +((snowPts / 25) * 100).toFixed(0) },
+      { k: '高反', v: +altPts.toFixed(1), max: 25, note: `垭口 ${maxAlt}m · 营地最高 4750m · 连续高海拔`, pct: +((altPts / 25) * 100).toFixed(0) },
+      { k: '单日体力', v: +bodyPts.toFixed(1), max: 20, note: `日均 ${stats.dailyKm}km · ${stats.n} 个连续徒步日`, pct: +((bodyPts / 20) * 100).toFixed(0) },
+      { k: '连续海拔', v: streakPts, max: 7, note: `${stats.n} 天连续 4000m+，恢复不足风险累积`, pct: +((streakPts / 7) * 100).toFixed(0) },
+    ],
+    expPts, loadPts,
+    summary: `${levelLabel}：综合降水/低温/高反/体力四维。${exp === 'beginner' ? '你是新手，经验修正 +8 —— 强烈建议压缩每日里程并至少安排 2 个适应日' : exp === 'pro' ? '老手经验修正 -6，但海拔与天气风险依然真实存在' : ''}`,
+  };
+}
+
+/* ---------- ★★★ P1（09-11）：Naismith 耗时估算 / 海拔平滑 / GCJ-02 坐标转换 ---------- */
+
+/* ① Naismith 耗时估算（TrailScope/trailer 思路，MIT 可移植 + 思路重写）
+   公式：平地 4km/h，每 500m 爬升加 1h，每 600m 下降减 20min；最后加 15% 休息；
+   重装因子 ×1.2，老手 ×0.9，新手 ×1.1。
+   输入：distKm（km）、climbUp（m）、climbDown（m，可选）、opts { load, experience }
+   输出：{ hours, hoursBase, restMin, paceKmh, display } */
+function naismithTime(distKm, climbUp, opts) {
+  if (!distKm || isNaN(distKm) || distKm <= 0) return null;
+  const climb = Number(climbUp) || 0;
+  const down = Number(opts && opts.climbDown) || 0;
+  // 基础行走时间：4km/h 平地
+  let hours = distKm / 4;
+  // 爬升：每 500m +1h
+  hours += climb / 500;
+  // 下降：每 600m 减 20min（下限不减过 10%）
+  hours -= Math.min(down / 600 * (20 / 60), hours * 0.1);
+  const hoursBase = hours;
+  // 休息加成 15%
+  const restMin = Math.round(hours * 60 * 0.15);
+  hours *= 1.15;
+  // 经验修正
+  const expF = (opts && opts.experience) === 'pro' ? 0.9 : (opts && opts.experience) === 'beginner' ? 1.1 : 1.0;
+  // 重装修正
+  const loadF = (opts && opts.load) === 'heavy' ? 1.2 : 1.0;
+  hours = hours * expF * loadF;
+  const paceKmh = +(distKm / hours).toFixed(1);
+  const h = Math.floor(hours);
+  const min = Math.round((hours - h) * 60);
+  const display = h > 0 ? `${h}h${min >= 10 ? min : '0' + min}` : `${min} 分钟`;
+  return { hours: +hours.toFixed(1), hoursBase: +hoursBase.toFixed(1), restMin, paceKmh, display };
+}
+
+/* ② 海拔平滑（TrailScope 4m residual 累积法，MIT 可移植）
+   逐点累加海拔差，残差超过 ±4m 才计入爬升/下降，抗 GPS 抖动。
+   输入/输出：{ alt 数组 } → { alt, gain, loss }（gain/loss 为平滑后累计） */
+function smoothElevation(alts) {
+  if (!alts || !alts.length) return { alt: alts || [], gain: 0, loss: 0 };
+  const TH = 4; // 4m 阈值
+  let res = 0, gain = 0, loss = 0;
+  const out = [alts[0]];
+  for (let i = 1; i < alts.length; i++) {
+    const d = alts[i] - alts[i - 1];
+    res += d;
+    if (Math.abs(res) >= TH) {
+      const absorbed = res - (res > 0 ? TH : -TH);
+      if (res > 0) gain += res; else loss += -res;
+      out.push(out[out.length - 1] + res);
+      res = 0;
+    } else {
+      out.push(out[out.length - 1]);
+    }
+  }
+  if (Math.abs(res) > 0) {
+    if (res > 0) gain += res; else loss += -res;
+    out[out.length - 1] += res;
+  }
+  return { alt: out, gain: Math.round(gain), loss: Math.round(loss) };
+}
+
+/* ③ GCJ-02 坐标转换（TrailScope coords.js 算法重写，WGS84 → GCJ-02，偏移不超过 700m）
+   用途：将来接高德/天地图等国内底图时必须做偏移（国内合规）；
+   当前 MapLibre 用 OSM/卫星底图（WGS84）不需要，此函数作为前瞻工具导出。 */
+function outOfChina(lon, lat) {
+  return lon < 72.004 || lon > 137.8347 || lat < 0.8293 || lat > 55.8271;
+}
+function transformLat(x, y) {
+  let ret = -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+  ret += (20 * Math.sin(6 * x * Math.PI) + 20 * Math.sin(2 * x * Math.PI)) * 2 / 3;
+  ret += (20 * Math.sin(y * Math.PI) + 40 * Math.sin(y / 3 * Math.PI)) * 2 / 3;
+  ret += (160 * Math.sin(y / 12 * Math.PI) + 320 * Math.sin(y * Math.PI / 30)) * 2 / 3;
+  return ret;
+}
+function transformLon(x, y) {
+  let ret = 300 + x + 2 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+  ret += (20 * Math.sin(6 * x * Math.PI) + 20 * Math.sin(2 * x * Math.PI)) * 2 / 3;
+  ret += (20 * Math.sin(x * Math.PI) + 40 * Math.sin(x / 3 * Math.PI)) * 2 / 3;
+  ret += (150 * Math.sin(x / 12 * Math.PI) + 300 * Math.sin(x / 30 * Math.PI)) * 2 / 3;
+  return ret;
+}
+function wgs84ToGcj02(lon, lat) {
+  if (outOfChina(lon, lat)) return { lon, lat };
+  const a = 6378245.0, ee = 0.00669342162296594323;
+  let dLat = transformLat(lon - 105.0, lat - 35.0);
+  let dLon = transformLon(lon - 105.0, lat - 35.0);
+  const radLat = lat / 180.0 * Math.PI;
+  let magic = Math.sin(radLat);
+  magic = 1 - ee * magic * magic;
+  const sqrtMagic = Math.sqrt(magic);
+  dLat = (dLat * 180.0) / ((a * (1 - ee)) / (magic * sqrtMagic) * Math.PI);
+  dLon = (dLon * 180.0) / (a / sqrtMagic * Math.cos(radLat) * Math.PI);
+  return { lon: lon + dLon, lat: lat + dLat };
+}
+
 /* ★ 经验水平差异化建议：天数/每日里程/垭口/装备/风险等级（让"新手/中等/老手"选择有意义） */
 function experienceAdvice(exp) {
   const E = {
@@ -1059,6 +1287,24 @@ function buildPlan(input) {
       budget: budgetEval,
       shots: shots,
       variants: variants,
+      /* ★★ 难度 × 风险评估（09-11 新增，TrailScope 思路 + 确定性加权） */
+      difficulty: difficultyScore({ sched: sched.days, load: input.load }),
+      risk: riskScore({ sched: sched.days, month: m, load: input.load, experience: input.experience }),
+      /* ★★ P1：Naismith 逐日耗时估算（重装默认，经验修正） */
+      timing: {
+        load: input.load,
+        experience: input.experience,
+        days: sched.days.map(d => {
+          const km = parseDistKm(d.dist);
+          if (km === null) return null;
+          const up = parseClimbUp(d.climb);
+          return naismithTime(km, up, {
+            load: input.load,
+            experience: input.experience,
+            climbDown: d.climb ? (d.climb.match(/-\s*(\d+)/g) || []).reduce((s, x) => Math.max(s, parseInt(x.replace(/[^0-9]/g, ''), 10) || 0), 0) : 0,
+          });
+        }),
+      },
     },
   };
 }
@@ -1079,5 +1325,10 @@ function buildPlan(input) {
     evaluateBudget: evaluateBudget,
     shotAdvice: shotAdvice,
     generateVariants: generateVariants,
+    difficultyScore: difficultyScore,
+    riskScore: riskScore,
+    naismithTime: naismithTime,
+    smoothElevation: smoothElevation,
+    wgs84ToGcj02: wgs84ToGcj02,
   };
 })(window);
