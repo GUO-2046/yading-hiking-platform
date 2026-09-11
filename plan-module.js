@@ -452,6 +452,11 @@
 
   global.highlightDays = function (which, trackSegs) {
     if (!trackSegs) return;
+    // ★ GCJ-02：底图（高德）为 GCJ-02，轨迹须转 GCJ 后入图；引擎缺失时降级原样
+    const toGcj = (lon, lat) => {
+      const f = global.YadingEngine && global.YadingEngine.wgs84ToGcj02;
+      return f ? f(lon, lat) : { lon: lon, lat: lat };
+    };
     const ready = () => {
       clearDayLayers();
       const segs = (which === 'all') ? trackSegs : [trackSegs[Number(which) - 1]].filter(Boolean);
@@ -462,7 +467,7 @@
         segs.forEach((s, idx) => {
           const color = DAY_COLORS[idx % DAY_COLORS.length];
           const sourceId = 'day-all-' + idx;
-          const coords = s.pts.map(p => [p[0], p[1], p[2] || 0]);
+          const coords = s.pts.map(p => { const g = toGcj(p[0], p[1]); return [g.lon, g.lat, p[2] || 0]; });
           map.addSource(sourceId, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} } });
           map.addLayer({
             id: sourceId + '-glow', type: 'line', source: sourceId,
@@ -475,16 +480,16 @@
             paint: { 'line-color': color, 'line-width': 5, 'line-opacity': 0.95 }
           });
         });
-        // 飞到全程起点
+        // 飞到全程起点（GCJ）
         const first = segs[0].pts[0];
-        if (first) map.flyTo({ center: [first[0], first[1]], zoom: 11.5, pitch: 50, duration: 1500 });
+        if (first) { const g = toGcj(first[0], first[1]); map.flyTo({ center: [g.lon, g.lat], zoom: 11.5, pitch: 50, duration: 1500 }); }
       } else {
         // 单日：用 day-N 源
         const s = segs[0];
         const realIdx = Number(which) - 1;
         const color = DAY_COLORS[realIdx % DAY_COLORS.length];
         const sourceId = 'day-' + realIdx;
-        const coords = s.pts.map(p => [p[0], p[1], p[2] || 0]);
+        const coords = s.pts.map(p => { const g = toGcj(p[0], p[1]); return [g.lon, g.lat, p[2] || 0]; });
         map.addSource(sourceId, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} } });
         map.addLayer({
           id: sourceId + '-glow', type: 'line', source: sourceId,
@@ -497,7 +502,7 @@
           paint: { 'line-color': color, 'line-width': 5, 'line-opacity': 0.95 }
         });
         const first = s.pts[0];
-        if (first) map.flyTo({ center: [first[0], first[1]], zoom: 11.5, pitch: 50, duration: 1500 });
+        if (first) { const g = toGcj(first[0], first[1]); map.flyTo({ center: [g.lon, g.lat], zoom: 11.5, pitch: 50, duration: 1500 }); }
       }
     };
     if (map.loaded()) ready();
