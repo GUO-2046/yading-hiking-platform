@@ -121,14 +121,14 @@
             display: flex;
             align-items: center;
             gap: 14px;
-            padding: 18px 30px;
+            padding: 11px 30px;
             background: rgba(255, 255, 255, 0.5);
             backdrop-filter: blur(40px) saturate(1.8);
             -webkit-backdrop-filter: blur(40px) saturate(1.8);
             border-bottom: 1px solid rgba(255, 255, 255, 0.65);
         }
         .header h1 {
-            font-size: 22px;
+            font-size: 19px;
             font-weight: 700;
             letter-spacing: -0.01em;
             background: linear-gradient(92deg, #1b2a4a 10%, var(--brand-blue) 55%, var(--brand-indigo) 90%);
@@ -136,7 +136,7 @@
             background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        .header p { font-size: 13px; color: var(--txt-mid); font-weight: 400; }
+        .header p { font-size: 12px; color: var(--txt-mid); font-weight: 400; }
         .v2-version-badge {
             display: inline-flex; align-items: center; justify-content: center;
             min-width: 40px; height: 24px; padding: 0 9px;
@@ -157,8 +157,8 @@
         .social-link {
             display: inline-flex;
             align-items: center;
-            gap: 7px;
-            padding: 7px 13px;
+            gap: 6px;
+            padding: 5px 12px;
             background: rgba(255, 255, 255, 0.55);
             border: 1px solid rgba(255, 255, 255, 0.85);
             border-radius: var(--r-pill, 999px);
@@ -168,7 +168,7 @@
             -webkit-backdrop-filter: blur(28px) saturate(1.8);
             box-shadow: var(--shadow-float, 0 8px 24px -10px rgba(31,58,110,.25));
             transition: all var(--dur, .35s) var(--ease, cubic-bezier(.25,.1,.25,1));
-            font-size: 13px;
+            font-size: 12.5px;
             font-weight: 600;
             white-space: nowrap;
         }
@@ -997,10 +997,11 @@
         .hotel-rec-box .hr-alt-title { font-weight: 600; color: var(--txt-hi); margin-bottom: 3px; }
         .hotel-rec-box .hr-alt-item { line-height: 1.7; }
         .g-item.good { border-left-color: #22c55e; }
-        /* ★ 难度 × 风险评估卡片（09-11） */
-        .score-box { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-        @media (max-width: 640px) { .score-box { grid-template-columns: 1fr; } }
+        /* ★ 难度 × 风险评估卡片（09-11）· 上下排列（09-12 调整） */
+        .score-box { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; width: 100%; }
         .score-card {
+            width: 100%;
+            box-sizing: border-box;
             background: rgba(255,255,255,0.035);
             border: 1px solid var(--glass-border);
             border-radius: var(--r-md);
@@ -1024,7 +1025,7 @@
             align-self: flex-start; font-size: 11px; font-weight: 700;
             padding: 2px 9px; border-radius: 99px; letter-spacing: .3px;
         }
-        .sc-tag.hot { background: rgba(255,59,48,0.16); color: #ff6b61; border: 1px solid rgba(255,59,48,0.35); }
+        .sc-tag.hot { background: rgba(255,59,48,0.18); color: #ff8f87; border: 1px solid rgba(255,59,48,0.4); }
         .sc-tag.warm { background: rgba(255,149,0,0.15); color: #ffb03a; border: 1px solid rgba(255,149,0,0.35); }
         .sc-tag.amber { background: rgba(255,204,0,0.12); color: #ffd54f; border: 1px solid rgba(255,204,0,0.3); }
         .sc-tag.cool { background: rgba(52,199,89,0.14); color: #4cd964; border: 1px solid rgba(52,199,89,0.3); }
@@ -1036,7 +1037,7 @@
         .sc-row-v span { display: block; color: var(--txt-mid); line-height: 1.35; }
         .sc-note { font-size: 11px; color: var(--txt-mid); border-top: 1px dashed var(--glass-border); padding-top: 6px; line-height: 1.5; }
         .sc-sum { font-size: 11.5px; line-height: 1.55; color: var(--txt); background: rgba(255,255,255,0.05); border-radius: var(--r-sm); padding: 7px 9px; }
-        .sc-sum.warn { color: #ffd7d4; background: rgba(255,59,48,0.10); border: 1px solid rgba(255,59,48,0.22); }
+        .sc-sum.warn { color: #ffe3e1; background: rgba(255,59,48,0.14); border: 1px solid rgba(255,59,48,0.3); }
         @media (max-width: 520px) { .variant-row { grid-template-columns: 1fr; } }
 
         .summary-card {
@@ -1298,19 +1299,19 @@
             .map-section { height: 55vh; min-height: 360px; }
             .header { padding: 14px 18px; }
         }
-    /* ★ 法律合规警示条（2026-09-01 亚丁管理局严禁非法穿越新规） */
-    .legal-alert{position:relative;margin:0 auto 14px;max-width:1400px;border-radius:14px;overflow:hidden;
+    /* ★ 法律合规警示条（2026-09-01 亚丁管理局严禁非法穿越新规）· 高度压缩 09-12 */
+    .legal-alert{position:relative;margin:0 auto 8px;max-width:1400px;border-radius:12px;overflow:hidden;
         background:linear-gradient(135deg,#fff1f0 0%,#ffe7e5 100%);
         border:1px solid #ffccc7;box-shadow:0 4px 16px rgba(255,77,79,.10);}
     .legal-alert.la-collapsed .la-body{display:none}
-    .la-head{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;user-select:none}
-    .la-badge{flex-shrink:0;background:#ff4d4f;color:#fff;font-size:12px;font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.5px}
-    .la-title{font-size:14.5px;font-weight:700;color:#a8071a;flex:1;line-height:1.5}
+    .la-head{display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;user-select:none}
+    .la-badge{flex-shrink:0;background:#ff4d4f;color:#fff;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:6px;letter-spacing:.5px}
+    .la-title{font-size:13px;font-weight:700;color:#a8071a;flex:1;line-height:1.5}
     .la-title em{font-style:normal;color:#cf1322}
-    .la-toggle{flex-shrink:0;font-size:12px;color:#cf1322;background:rgba(255,77,79,.10);padding:4px 10px;border-radius:20px;white-space:nowrap}
-    .la-close{position:absolute;top:8px;right:10px;background:none;border:none;font-size:18px;color:#cf1322;opacity:.5;cursor:pointer;line-height:1;padding:2px 6px}
+    .la-toggle{flex-shrink:0;font-size:11.5px;color:#cf1322;background:rgba(255,77,79,.10);padding:2px 8px;border-radius:20px;white-space:nowrap}
+    .la-close{position:absolute;top:6px;right:9px;background:none;border:none;font-size:16px;color:#cf1322;opacity:.5;cursor:pointer;line-height:1;padding:2px 6px}
     .la-close:hover{opacity:1}
-    .la-body{padding:0 16px 14px;font-size:13px;color:#5c0011;line-height:1.75}
+    .la-body{padding:0 16px 12px;font-size:13px;color:#5c0011;line-height:1.75}
     .la-body b{color:#a8071a}
     .la-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin:10px 0}
     .la-card{background:rgba(255,255,255,.75);border:1px solid #ffccc7;border-radius:10px;padding:10px 12px}
@@ -1319,7 +1320,7 @@
     .la-card li{margin:3px 0;font-size:12.5px}
     .la-src{margin-top:10px;padding-top:9px;border-top:1px dashed #ffccc7;font-size:11.5px;color:#8c1d18;opacity:.85}
     .la-src a{color:#a8071a;text-decoration:underline}
-    @media(max-width:640px){.la-title{font-size:13px}.la-badge{font-size:11px}.la-body{font-size:12.5px}}
+    @media(max-width:640px){.la-title{font-size:12.5px}.la-badge{font-size:10.5px}.la-body{font-size:12.5px}}
     </style>
 </head>
 <body data-page-node-id="iL58maXmgrCcKqIC7Ev2BN">
