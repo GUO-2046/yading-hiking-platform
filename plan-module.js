@@ -554,16 +554,26 @@
     const pts = ensureAlt(rawPts);
     if (!pts || pts.length < 2) return;
     if (pts.some(p => typeof p[2] !== 'number' || isNaN(p[2]))) return;
+    // P1: 4m residual 海拔平滑（抗 GPS 抖动，TrailScope 算法）—— 平滑曲线后再绘制
+    let drawPts = pts;
+    try {
+      const sm = global.YadingEngine && global.YadingEngine.smoothElevation
+        ? global.YadingEngine.smoothElevation(pts.map(p => p[2]))
+        : null;
+      if (sm && sm.alt && sm.alt.length === pts.length) {
+        drawPts = pts.map((p, i) => [p[0], p[1], sm.alt[i]]);
+      }
+    } catch (e) { /* 平滑失败退回原始绘制 */ }
     const ctx = canvas.getContext('2d');
     const w = canvas.width = canvas.offsetWidth * 2 || 600;
     const h = canvas.height = canvas.offsetHeight * 2 || 96;
     ctx.clearRect(0, 0, w, h);
 
-    const minE = Math.min(...pts.map(p => p[2]));
-    const maxE = Math.max(...pts.map(p => p[2]));
+    const minE = Math.min(...drawPts.map(p => p[2]));
+    const maxE = Math.max(...drawPts.map(p => p[2]));
     const range = maxE - minE || 1;
     const plotW = w - 8, plotH = h - 8;   // 上下各留 4px
-    const X = i => 4 + (i / (pts.length - 1)) * plotW;
+    const X = i => 4 + (i / (drawPts.length - 1)) * plotW;
     const Y = e => 4 + (1 - (e - minE) / range) * plotH;
 
     // 填充色带
@@ -572,15 +582,15 @@
     grad.addColorStop(1, 'rgba(102, 126, 234, 0.05)');
     ctx.beginPath();
     ctx.moveTo(X(0), h);
-    pts.forEach((p, i) => { ctx.lineTo(X(i), Y(p[2])); });
-    ctx.lineTo(X(pts.length - 1), h);
+    drawPts.forEach((p, i) => { ctx.lineTo(X(i), Y(p[2])); });
+    ctx.lineTo(X(drawPts.length - 1), h);
     ctx.closePath();
     ctx.fillStyle = grad;
     ctx.fill();
 
     // 剖面线
     ctx.beginPath();
-    pts.forEach((p, i) => { i === 0 ? ctx.moveTo(X(i), Y(p[2])) : ctx.lineTo(X(i), Y(p[2])); });
+    drawPts.forEach((p, i) => { i === 0 ? ctx.moveTo(X(i), Y(p[2])) : ctx.lineTo(X(i), Y(p[2])); });
     ctx.strokeStyle = '#667eea';
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
@@ -591,10 +601,10 @@
     ctx.textBaseline = 'bottom';
     ctx.fillStyle = 'rgba(100, 116, 139, 0.9)';
     ctx.textAlign = 'left';
-    ctx.fillText(Math.round(minE) + 'm', 4, Y(pts[0][2]) - 2);
+    ctx.fillText(Math.round(minE) + 'm', 4, Y(drawPts[0][2]) - 2);
     ctx.textAlign = 'right';
-    const lastX = X(pts.length - 1);
-    ctx.fillText(Math.round(pts[pts.length - 1][2]) + 'm', Math.min(lastX + 2, w - 2), Y(pts[pts.length - 1][2]) - 2);
+    const lastX = X(drawPts.length - 1);
+    ctx.fillText(Math.round(drawPts[drawPts.length - 1][2]) + 'm', Math.min(lastX + 2, w - 2), Y(drawPts[drawPts.length - 1][2]) - 2);
   }
 
   /* ---------- 渲染 ---------- */
@@ -691,6 +701,9 @@
         top.appendChild(el('div', 'sched-route', d.route || ''));
         item.appendChild(top);
         const metaRow = el('div', 'sched-meta');
+        // P1: 每日 Naismith 耗时（timing.days 与 schedule 一一对应；适应日/无里程为 null 自动跳过）
+        const tmDay = (plan.personalize && plan.personalize.timing && plan.personalize.timing.days) ? plan.personalize.timing.days[i] : null;
+        if (tmDay && tmDay.display) metaRow.appendChild(el('span', 'p1-time', `⏱️ 约 ${tmDay.display}`));
         if (d.dist) metaRow.appendChild(el('span', '', `📏 ${d.dist}`));
         if (d.climb) metaRow.appendChild(el('span', '', `⛰️ <b>${d.climb}</b>`));
         if (d.pass) metaRow.appendChild(el('span', '', `🚩 ${d.pass}`));
@@ -780,6 +793,70 @@
     /* 3.5 个性化：经验×健康 差异 + 预算评估 + 拍摄机位 + 三套方案 */
     if (plan.personalize) {
       const P = plan.personalize;
+
+      /* ★★★ 难度 × 风险评估（09-11 新增：TrailScope 思路 + 确定性加权模型） */
+      if (P.difficulty && P.risk) {
+        const scoreBox = el('div', 'score-box');
+
+        /* —— 难度卡片 —— */
+        const D = P.difficulty;
+        const dCard = el('div', 'score-card diff');
+        dCard.appendChild(el('div', 'sc-head', `<span class="sc-ico">🧗</span><b>路线难度</b><span class="sc-num" style="color:var(${D.score >= 85 ? '--brand-red' : D.score >= 62 ? '--brand-orange' : '--brand-blue'})">${D.score}<i>/100</i></span>`));
+        const dBand = el('div', 'sc-band');
+        const dFill = el('div', 'sc-fill', '');
+        dFill.style.width = D.score + '%';
+        dFill.style.background = D.score >= 85 ? 'linear-gradient(90deg,#f43f5e,#fb7185)' : D.score >= 62 ? 'linear-gradient(90deg,#f59e0b,#fbbf24)' : 'linear-gradient(90deg,#3b82f6,#60a5fa)';
+        dBand.appendChild(dFill);
+        dCard.appendChild(dBand);
+        const dTag = el('div', 'sc-tag' + (D.score >= 85 ? ' hot' : D.score >= 62 ? ' warm' : ' cool'), `${D.levelLabel} · ${D.levelKey}`);
+        dCard.appendChild(dTag);
+        D.dims.forEach(dm => {
+          const row = el('div', 'sc-row');
+          row.appendChild(el('div', 'sc-row-k', dm.k));
+          const rb = el('div', 'sc-row-bar');
+          const rf = el('div', 'sc-row-fill', '');
+          rf.style.width = Math.max(4, dm.pct) + '%';
+          rf.style.background = 'var(--brand-blue)';
+          rb.appendChild(rf);
+          row.appendChild(rb);
+          row.appendChild(el('div', 'sc-row-v', `<b>${dm.v}/${dm.max}</b><span>${dm.note}</span>`));
+          dCard.appendChild(row);
+        });
+        if (D.compact) dCard.appendChild(el('div', 'sc-note', `⚡ 天数紧凑度修正 +${D.compact}：徒步日越少，连续高强度日越多`));
+        dCard.appendChild(el('div', 'sc-sum', '💡 ' + D.summary));
+        scoreBox.appendChild(dCard);
+
+        /* —— 风险卡片 —— */
+        const R = P.risk;
+        const rColor = R.score >= 75 ? 'var(--brand-red)' : R.score >= 60 ? 'var(--brand-orange)' : R.score >= 40 ? 'var(--brand-amber)' : 'var(--brand-green)';
+        const rFillBg = R.score >= 75 ? 'linear-gradient(90deg,#e11d48,#f43f5e)' : R.score >= 60 ? 'linear-gradient(90deg,#d97706,#f59e0b)' : R.score >= 40 ? 'linear-gradient(90deg,#ca8a04,#eab308)' : 'linear-gradient(90deg,#16a34a,#4ade80)';
+        const rCard = el('div', 'score-card risk');
+        rCard.appendChild(el('div', 'sc-head', `<span class="sc-ico">⚠️</span><b>出行风险</b><span class="sc-num" style="color:${rColor}">${R.score}<i>/100</i></span>`));
+        const rBand = el('div', 'sc-band');
+        const rFill = el('div', 'sc-fill', '');
+        rFill.style.width = R.score + '%';
+        rFill.style.background = rFillBg;
+        rBand.appendChild(rFill);
+        rCard.appendChild(rBand);
+        rCard.appendChild(el('div', 'sc-tag' + (R.score >= 75 ? ' hot' : R.score >= 60 ? ' warm' : R.score >= 40 ? ' amber' : ' cool'), `${R.levelLabel} · ${R.levelKey}`));
+        R.dims.forEach(dm => {
+          const row = el('div', 'sc-row');
+          row.appendChild(el('div', 'sc-row-k', dm.k));
+          const rb = el('div', 'sc-row-bar');
+          const rf = el('div', 'sc-row-fill', '');
+          rf.style.width = Math.max(4, dm.pct) + '%';
+          rf.style.background = dm.v / dm.max >= 0.75 ? '#f43f5e' : dm.v / dm.max >= 0.5 ? '#f59e0b' : '#eab308';
+          rb.appendChild(rf);
+          row.appendChild(rb);
+          row.appendChild(el('div', 'sc-row-v', `<b>${dm.v}/${dm.max}</b><span>${dm.note}</span>`));
+          rCard.appendChild(row);
+        });
+        if (R.expPts !== 0) rCard.appendChild(el('div', 'sc-note', `${R.expPts > 0 ? '🔺' : '🔻'} 经验修正 ${R.expPts > 0 ? '+' : ''}${R.expPts}（${R.expPts > 0 ? '新手：高原经验不足，风险上调' : '老手：经验下调风险'}` + (R.loadPts ? ` · 重装 +${R.loadPts}` : '') + '）'));
+        rCard.appendChild(el('div', 'sc-sum' + (R.score >= 60 ? ' warn' : ''), '🛡️ ' + R.advice));
+        scoreBox.appendChild(rCard);
+
+        box.appendChild(section('🎯', '难度 × 风险评估', scoreBox, '基于路线特征 × 你的画像 × 月份气候自动计算'));
+      }
 
       /* 个性化理由（"因为你是X，所以Y"） */
       if (P.why && P.why.length) {
