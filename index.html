@@ -997,6 +997,46 @@
         .hotel-rec-box .hr-alt-title { font-weight: 600; color: var(--txt-hi); margin-bottom: 3px; }
         .hotel-rec-box .hr-alt-item { line-height: 1.7; }
         .g-item.good { border-left-color: #22c55e; }
+        /* ★ 难度 × 风险评估卡片（09-11） */
+        .score-box { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        @media (max-width: 640px) { .score-box { grid-template-columns: 1fr; } }
+        .score-card {
+            background: rgba(255,255,255,0.035);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--r-md);
+            padding: 12px 13px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            transition: all .25s var(--ease);
+        }
+        .score-card.diff { border-color: rgba(94,92,230,0.35); background: linear-gradient(160deg, rgba(94,92,230,0.10), rgba(10,132,255,0.05)); }
+        .score-card.risk { border-color: rgba(255,59,48,0.32); background: linear-gradient(160deg, rgba(255,59,48,0.08), rgba(255,149,0,0.05)); }
+        .score-card:hover { transform: translateY(-2px); }
+        .sc-head { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 700; color: var(--txt-hi); }
+        .sc-head b { flex: 1; }
+        .sc-ico { font-size: 16px; }
+        .sc-num { font-size: 24px; font-weight: 800; line-height: 1; }
+        .sc-num i { font-size: 12px; font-style: normal; font-weight: 600; color: var(--txt-mid); margin-left: 2px; }
+        .sc-band { height: 9px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden; }
+        .sc-fill { height: 100%; border-radius: 99px; transition: width .6s var(--ease); }
+        .sc-tag {
+            align-self: flex-start; font-size: 11px; font-weight: 700;
+            padding: 2px 9px; border-radius: 99px; letter-spacing: .3px;
+        }
+        .sc-tag.hot { background: rgba(255,59,48,0.16); color: #ff6b61; border: 1px solid rgba(255,59,48,0.35); }
+        .sc-tag.warm { background: rgba(255,149,0,0.15); color: #ffb03a; border: 1px solid rgba(255,149,0,0.35); }
+        .sc-tag.amber { background: rgba(255,204,0,0.12); color: #ffd54f; border: 1px solid rgba(255,204,0,0.3); }
+        .sc-tag.cool { background: rgba(52,199,89,0.14); color: #4cd964; border: 1px solid rgba(52,199,89,0.3); }
+        .sc-row { display: grid; grid-template-columns: 64px 1fr 112px; gap: 8px; align-items: center; font-size: 11px; }
+        .sc-row-k { color: var(--txt-mid); font-weight: 600; white-space: nowrap; }
+        .sc-row-bar { height: 6px; border-radius: 99px; background: rgba(255,255,255,0.07); overflow: hidden; }
+        .sc-row-fill { height: 100%; border-radius: 99px; }
+        .sc-row-v b { color: var(--txt-hi); font-weight: 700; }
+        .sc-row-v span { display: block; color: var(--txt-mid); line-height: 1.35; }
+        .sc-note { font-size: 11px; color: var(--txt-mid); border-top: 1px dashed var(--glass-border); padding-top: 6px; line-height: 1.5; }
+        .sc-sum { font-size: 11.5px; line-height: 1.55; color: var(--txt); background: rgba(255,255,255,0.05); border-radius: var(--r-sm); padding: 7px 9px; }
+        .sc-sum.warn { color: #ffd7d4; background: rgba(255,59,48,0.10); border: 1px solid rgba(255,59,48,0.22); }
         @media (max-width: 520px) { .variant-row { grid-template-columns: 1fr; } }
 
         .summary-card {
@@ -1081,6 +1121,7 @@
         .sched-route { font-size: 13px; font-weight: 600; color: var(--txt-hi); }
         .sched-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; font-size: 12px; color: var(--txt); }
         .sched-meta b { color: var(--txt-hi); }
+        .sched-meta .p1-time { color: var(--brand-blue, #667eea); font-weight: 600; background: rgba(102, 126, 234, 0.08); padding: 1px 7px; border-radius: 999px; }
         .sched-note { font-size: 12px; color: var(--txt-mid); margin-top: 6px; }
         .sched-wx { display: flex; align-items: center; gap: 6px; margin-top: 7px; font-size: 12px; flex-wrap: wrap; }
         .sched-wx .wx-tag {
