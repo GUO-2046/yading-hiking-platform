@@ -325,7 +325,7 @@
       dt.setDate(dt.getDate() + i);
       return dt;
     };
-    const iso = (dt) => dt.toISOString().slice(0, 10);
+    const iso = (dt) => fmtLocal(dt);
 
     let sunny = 0, rain = 0, snow = 0, unknown = 0;
     let tMin = Infinity, tMax = -Infinity, haveTemp = false;
@@ -629,6 +629,368 @@
     sec.appendChild(bodyNode);
     return sec;
   }
+
+  /* ========== ★ 2026-09-14 四项出行前刚需改进 ========== */
+
+  /* ---------- 通用小工具 ---------- */
+  function fmtKg(g) { return g >= 1000 ? (g / 1000).toFixed(1) + 'kg' : g + 'g'; }
+  const pad2 = (n) => String(n).padStart(2, '0');
+  /* 本地日期 → YYYY-MM-DD（勿用 toISOString，UTC+8 会偏一天） */
+  const fmtLocal = (dt) => dt.getFullYear() + '-' + pad2(dt.getMonth() + 1) + '-' + pad2(dt.getDate());
+
+  /* ---------- 🛠 #125 日出日落计算（离线 NOAA 简化算法，精度 ±2 分钟内） ---------- */
+  const _RAD = Math.PI / 180;
+  function calcSunTimes(lat, lon, date) {
+    // 依 NOAA 简化赤纬/均时差公式，返回 { sunrise:{h,m}, sunset:{h,m} }（UTC+8 墙钟）
+    const dayOfYear = Math.floor((Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) - Date.UTC(date.getUTCFullYear(), 0, 1)) / 86400000) + 1;
+    const gamma = (2 * Math.PI / 365) * (dayOfYear - 1);
+    const eqtime = 229.18 * (0.000075 + 0.001868 * Math.cos(gamma) - 0.032077 * Math.sin(gamma) - 0.014615 * Math.cos(2 * gamma) - 0.040849 * Math.sin(2 * gamma));
+    const decl = 0.006918 - 0.399912 * Math.cos(gamma) + 0.070257 * Math.sin(gamma) - 0.006758 * Math.cos(2 * gamma) + 0.000907 * Math.sin(2 * gamma) - 0.002697 * Math.cos(3 * gamma) + 0.00148 * Math.sin(3 * gamma);
+    let hourAngle = 0;
+    const cosH = (Math.cos(90.833 * _RAD) - Math.sin(lat * _RAD) * Math.sin(decl)) / (Math.cos(lat * _RAD) * Math.cos(decl));
+    if (cosH >= -1 && cosH <= 1) hourAngle = Math.acos(cosH) / _RAD; // 无极昼极夜
+    // 太阳正午 UTC（天）+ 日照半长 → 日出/日落 UTC（天）
+    const noonUTC = (720 - 4 * lon - eqtime) / 1440;
+    const halfDay = hourAngle * 4 / 1440; // 4 分钟/度
+    const toLocal = (t) => {
+      const ms = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) + (t + 8 / 24) * 86400000; // UTC+8
+      const d = new Date(ms);
+      return { h: d.getUTCHours(), m: d.getUTCMinutes() };
+    };
+    return { sunrise: toLocal(noonUTC - halfDay), sunset: toLocal(noonUTC + halfDay) };
+  }
+
+  /* Open-Meteo 优先（未来16天 forecast/过去 archive），失败或更远期 → 离线天文计算 */
+  async function fetchSunTimes(lat, lon, dateISO) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const d = new Date(dateISO + 'T00:00:00');
+    const diff = Math.round((d - today) / 86400000);
+    if (diff >= -370 && diff <= 16) {
+      try {
+        if (diff >= 0) {
+          const r = await fetch('https://api.open-meteo.com/v1/forecast?' + new URLSearchParams({ latitude: lat, longitude: lon, daily: 'sunrise,sunset', timezone: 'Asia/Shanghai', forecast_days: 16 }));
+          const j = await r.json();
+          if (j.daily && j.daily.sunrise && j.daily.sunrise[diff]) return { sunrise: String(j.daily.sunrise[diff]).slice(11, 16), sunset: String(j.daily.sunset[diff]).slice(11, 16), src: '实时' };
+        } else {
+          const r = await fetch('https://archive-api.open-meteo.com/v1/archive?' + new URLSearchParams({ latitude: lat, longitude: lon, start_date: dateISO, end_date: dateISO, daily: 'sunrise,sunset', timezone: 'Asia/Shanghai' }));
+          const j = await r.json();
+          const i = (j.daily && j.daily.time) ? j.daily.time.indexOf(dateISO) : -1;
+          if (i >= 0 && j.daily.sunrise[i]) return { sunrise: String(j.daily.sunrise[i]).slice(11, 16), sunset: String(j.daily.sunset[i]).slice(11, 16), src: '去年相当' };
+        }
+      } catch (e) { /* 离线兜底 */ }
+    }
+    const t = calcSunTimes(Number(lat), Number(lon), new Date(dateISO + 'T00:00:00'));
+    return { sunrise: pad2(t.sunrise.h) + ':' + pad2(t.sunrise.m), sunset: pad2(t.sunset.h) + ':' + pad2(t.sunset.m), src: '天文计算' };
+  }
+
+  /* 营地名归一化：schedule 用「波用措」(措) 与 shots「波拥措」(拥) 字不同，统一匹配 */
+  const CAMP_ALIAS = { '波拥措': ['波拥措', '波用措', '波佣措', '波用'], '波用措': ['波拥措', '波用措', '波佣措', '波用'] };
+  function campNorm(name) {
+    const n = String(name || '');
+    const hit = Object.keys(CAMP_ALIAS).find(k => CAMP_ALIAS[k].some(a => n.includes(a)));
+    return hit || n;
+  }
+
+  /* ---------- 🧗 #122 装备清单生成器（可勾选 + 重量合计 + localStorage 持久化） ---------- */
+  function renderGearChecklist(g, key) {
+    const items = (g && g.items) || [];
+    const catNames = (g && g.catNames) || {};
+    const box = el('div', 'gear-ck');
+    if (!items.length) return box;
+    const catOrder = ['core', 'oct', 'med', 'kit', 'com', 'food'];
+    const groups = {};
+    items.forEach(it => { (groups[it.cat] = groups[it.cat] || []).push(it); });
+
+    // 基础包重（入包数字项合计，不含食品/水）
+    let baseW = 0;
+    items.forEach(it => { if (it.w !== '-' && it.cat !== 'med' && it.cat !== 'food') baseW += Number(it.w); });
+    const baseKg = (baseW / 1000).toFixed(1);
+
+    // 进度条
+    const prog = el('div', 'gear-progress');
+    const bar = el('div', 'gp-bar');
+    const fill = el('div', 'gp-fill');
+    bar.appendChild(fill);
+    const progTxt = el('div', 'gp-txt', '');
+    prog.appendChild(bar);
+    prog.appendChild(progTxt);
+    box.appendChild(prog);
+
+    // 工具栏
+    const tools = el('div', 'gear-tools');
+    const allBtn = el('button', 'gear-tool-btn', '✅ 全选');
+    const noneBtn = el('button', 'gear-tool-btn', '🗑️ 清空');
+    tools.appendChild(allBtn);
+    tools.appendChild(noneBtn);
+    tools.appendChild(el('span', 'gear-saved', '勾选进度自动保存到本机'));
+    box.appendChild(tools);
+
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch (e) { saved = {}; }
+
+    const checkedNames = new Set();
+    const updateProgress = () => {
+      let n = 0, w = 0;
+      items.forEach(it => { if (checkedNames.has(it.name)) { n++; if (it.w !== '-') w += Number(it.w); } });
+      const pct = items.length ? Math.round(n / items.length * 100) : 0;
+      fill.style.width = pct + '%';
+      fill.style.background = pct === 100 ? 'linear-gradient(90deg,#22c55e,#4ade80)' : '';
+      progTxt.innerHTML = `已打包 <b>${n}</b>/${items.length} 件 · 已勾重量约 <b>${fmtKg(w)}</b> · 基础包重约 <b>${baseKg} kg</b>（不含食品/水/穿着）`;
+    };
+
+    catOrder.forEach(cat => {
+      const list = groups[cat];
+      if (!list || !list.length) return;
+      const catDiv = el('div', 'gear-cat');
+      catDiv.appendChild(el('div', 'gc-title', (catNames[cat] || cat) + ` <span class="gc-n">${list.length} 件</span>`));
+      const wrap = el('div', 'gc-items');
+      list.forEach(it => {
+        const lab = el('label', 'gi');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'gi-cb';
+        if (saved[it.name]) { cb.checked = true; checkedNames.add(it.name); }
+        cb.addEventListener('change', () => {
+          if (cb.checked) checkedNames.add(it.name); else checkedNames.delete(it.name);
+          const save = {};
+          items.forEach(x => { if (checkedNames.has(x.name)) save[x.name] = true; });
+          try { localStorage.setItem(key, JSON.stringify(save)); } catch (e) { /* 隐私模式 */ }
+          updateProgress();
+        });
+        const nm = el('span', 'gi-name', it.name);
+        const br = el('span', 'gi-brand', it.brand || '');
+        const right = el('span', 'gi-right');
+        right.appendChild(el('span', 'gi-w', it.w === '-' ? '不称重' : fmtKg(Number(it.w))));
+        lab.appendChild(cb);
+        lab.appendChild(nm);
+        lab.appendChild(br);
+        lab.appendChild(right);
+        wrap.appendChild(lab);
+      });
+      catDiv.appendChild(wrap);
+      box.appendChild(catDiv);
+    });
+    updateProgress();
+
+    allBtn.onclick = () => {
+      items.forEach(it => checkedNames.add(it.name));
+      box.querySelectorAll('.gi-cb').forEach(c => c.checked = true);
+      const save = {};
+      items.forEach(x => save[x.name] = true);
+      try { localStorage.setItem(key, JSON.stringify(save)); } catch (e) { /* */ }
+      updateProgress();
+    };
+    noneBtn.onclick = () => {
+      checkedNames.clear();
+      box.querySelectorAll('.gi-cb').forEach(c => c.checked = false);
+      try { localStorage.setItem(key, '{}'); } catch (e) { /* */ }
+      updateProgress();
+    };
+
+    box.appendChild(el('div', 'gear-note', '💡 食品与水另计（约 +6~8kg）：主食约 1kg/天、随身水 1.5-2L/天，新果牛场无水源需提前备足。重量为常见品牌估算值，实际以你的装备为准。'));
+    return box;
+  }
+
+  /* ---------- 🆘 #124 应急与现金面板 ---------- */
+  function buildEmergencySection(plan) {
+    const E = plan.emergency || (global.YadingEngine && global.YadingEngine.KB && global.YadingEngine.KB.emergency) || {};
+    const body = el('div');
+
+    // 现金估算：按徒步露营晚数
+    const sched = (plan && plan.schedule) || [];
+    const campNights = sched.filter(d => d.camp && d.camp !== '出山' && !String(d.camp).includes('香格里拉镇')).length;
+    const n = Math.max(1, campNights);
+    const people = plan.groupSize || 1;
+    const low = n * 30 + 50 + 300;
+    const high = n * 50 + 80 + 500 + 300;
+    const cash = el('div', 'emer-cash');
+    cash.appendChild(el('div', 'ec-head', '💵 现金携带建议（全程无信号、无移动支付）'));
+    cash.appendChild(el('div', 'ec-big', `人均 <b>${low}~${high}</b> 元` + (people > 1 ? ` · <b>${people}</b> 人合计 <b>${low * people}~${high * people}</b> 元` : '') + `<span class="ec-sub">（${people} 人 × 露营 ${n} 晚）</span>`));
+    const rows = el('div', 'g-list');
+    [
+      ['⛺ 营地费', `${n} 晚 × 30~50 元/人 = ${n * 30}~${n * 50} 元（波拥措免费 / 贡嘎扎则 30 / 新果·蛇湖 50）`],
+      ['⛽ 气罐', '230g 高原罐 50~80 元/罐，7 天约 1 大 + 1 小'],
+      ['🐴 骑马（可选）', '300~500 元/天（洛绒牛场—牛奶海约 300 单程），先谈价再上马'],
+      ['🚑 应急备用', '200~300 元（临时补给 / 救援联系 / 下撤打车）'],
+    ].forEach(([k, v]) => rows.appendChild(el('div', 'g-item', `<span class="dot">💵</span><div><b>${k}</b>：${v}</div>`)));
+    cash.appendChild(rows);
+    if (E.cash && E.cash.totalHint) cash.appendChild(el('div', 'callout warn', '💰 ' + E.cash.totalHint + '：实测有人用半包茶叶抵了贡嘎扎则的 30 元营地费 → 备 50/20/10 元零钞'));
+    body.appendChild(cash);
+
+    // 一键呼出电话
+    const ph = el('div', 'emer-phones');
+    ph.appendChild(el('div', 'r-sub', '📞 一键呼出（手机触碰号码即拨）'));
+    (E.phones || []).forEach(p => {
+      const row = el('div', 'g-item');
+      row.appendChild(el('span', 'dot', p.k.slice(0, 1)));
+      const inner = el('div');
+      inner.innerHTML = `<b>${p.k}</b>：<a class="tel-link" href="tel:${String(p.v).replace(/[^0-9+]/g, '')}">${p.v}</a>${p.note ? ` <span class="g-note">— ${p.note}</span>` : ''}`;
+      row.appendChild(inner);
+      ph.appendChild(row);
+    });
+    body.appendChild(ph);
+
+    // 卫星通讯 + 下撤
+    if (E.satellite) body.appendChild(el('div', 'callout gold', '🛰️ ' + E.satellite));
+    if (E.retreat) body.appendChild(el('div', 'callout warn', '⚠️ ' + E.retreat));
+    // 合规提示一行
+    const legal = (plan.pending || []).find(x => x.includes('穿越合规')) || '出发前致电亚管局 0836-6966022 确认穿越报备通道（2026-09-01 新规）';
+    body.appendChild(el('div', 'callout hot', '⚖️ ' + legal));
+    return body;
+  }
+
+  /* ---------- 🖨️ #123 打印版每日路书 ---------- */
+  function buildPrintBook(plan, weather, startDate) {
+    const sched = (plan && plan.schedule) || [];
+    const meta = (plan && plan.meta) || {};
+    const E = (plan && plan.emergency) || {};
+    const dateFmt = (dt) => (dt.getMonth() + 1) + '/' + dt.getDate();
+
+    const pb = el('div', 'pb-doc');
+    const head = el('div', 'pb-head');
+    head.appendChild(el('h1', 'pb-title', meta.name || '稻城亚丁大转山 · 每日路书'));
+    const nPeople = plan.groupSize || 1;
+    head.appendChild(el('div', 'pb-sub', `出发 ${dateFmt(startDate)} · ${sched.length} 天 · ${nPeople} 人 · ${meta.distance || ''} · ${meta.elevation || ''} · ${meta.bestWindow || ''}`));
+    pb.appendChild(head);
+
+    // 每日表
+    const tbl = el('table', 'pb-table');
+    tbl.innerHTML = '<tr><th>日期</th><th>天</th><th>行程</th><th>里程</th><th>爬升</th><th>垭口</th><th>营地</th><th>天气</th></tr>';
+    sched.forEach((d, i) => {
+      const dt = new Date(startDate);
+      dt.setDate(dt.getDate() + i);
+      const w = weather && weather[i];
+      let wstr = '';
+      if (w && w.code !== null && w.code !== undefined) wstr = `${w.tmin}~${w.tmax}℃${w.pop !== null && w.pop !== undefined ? ' 降水' + w.pop + '%' : ''}`;
+      else if (w) wstr = w.type || '';
+      const tr = el('tr');
+      tr.innerHTML = `<td>${dateFmt(dt)}</td><td>${d.day || ''}</td><td>${escapeHtml(d.route || '')}</td><td>${d.dist || '—'}</td><td>${d.climb || '—'}</td><td>${d.pass || '—'}</td><td>${escapeHtml(d.camp || '')}</td><td>${wstr}</td>`;
+      tbl.appendChild(tr);
+    });
+    pb.appendChild(tbl);
+
+    // 关键节点
+    const key = el('div', 'pb-sec');
+    key.appendChild(el('h2', 'pb-sec-t', '📌 关键节点'));
+    key.appendChild(el('div', 'pb-line', '· 垭口：措该达 5036m / 杂巴拉 4750m / 黑湖 4720-4750m / 松多 4670-4710m / 松洛 4650m — 白天过垭口、午后不上山'));
+    key.appendChild(el('div', 'pb-line', '· 水源：新果牛场无水源需提前备足；营地水源多受牦牛污染必须过滤/煮沸'));
+    key.appendChild(el('div', 'pb-line', '· 现金：全程无信号无移动支付，营地费/骑马均现金，备 500-1000 元零钞'));
+    key.appendChild(el('div', 'pb-line', '· 时间：最高营地可不过夜翻垭口防高反；垭口 10 月可能暗冰，冰爪雪套必带'));
+    pb.appendChild(key);
+
+    // 应急电话
+    const em = el('div', 'pb-sec');
+    em.appendChild(el('h2', 'pb-sec-t', '☎️ 应急电话与下撤'));
+    (E.phones || []).forEach(p => em.appendChild(el('div', 'pb-line', `· ${p.k}：${p.v}${p.note ? '（' + p.note + '）' : ''}`)));
+    if (E.retreat) em.appendChild(el('div', 'pb-line warn', '· 下撤：' + E.retreat));
+    pb.appendChild(em);
+
+    // 风险摘要（前 4 条）
+    const rk = el('div', 'pb-sec');
+    rk.appendChild(el('h2', 'pb-sec-t', '⚠️ 核心风险提醒'));
+    ((plan && plan.risks) || []).slice(0, 4).forEach(r => rk.appendChild(el('div', 'pb-line warn', '· ' + r)));
+    pb.appendChild(rk);
+
+    pb.appendChild(el('div', 'pb-foot', '平台生成于 ' + new Date().toLocaleString('zh-CN') + ' · 信息核实基准 2026-09-10，出行前请以官方公告为准'));
+    return pb;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function openPrintBook(plan, weather, startDate) {
+    const old = document.getElementById('printBookOverlay');
+    if (old) old.remove();
+    const wrap = el('div', 'print-book-overlay');
+    wrap.id = 'printBookOverlay';
+    const toolbar = el('div', 'pb-toolbar');
+    toolbar.appendChild(el('span', 'pb-ttl', '🖨️ A4 打印版路书预览（关闭打印用）'));
+    const prBtn = el('button', 'pb-btn', '🖨️ 打印 / 另存 PDF');
+    const closeBtn = el('button', 'pb-btn', '✕ 关闭');
+    toolbar.appendChild(prBtn);
+    toolbar.appendChild(closeBtn);
+    wrap.appendChild(toolbar);
+    wrap.appendChild(buildPrintBook(plan, weather, startDate));
+    document.body.appendChild(wrap);
+    prBtn.onclick = () => { try { window.print(); } catch (e) { alert('请使用浏览器菜单打印'); } };
+    closeBtn.onclick = () => wrap.remove();
+    wrap.scrollIntoView();
+  }
+
+  /* ---------- 新增样式注入 ---------- */
+  function injectPlanXtendCSS() {
+    if (document.getElementById('planx-css')) return;
+    const st = document.createElement('style');
+    st.id = 'planx-css';
+    st.textContent = `
+      /* 装备清单 */
+      .gear-ck{margin-top:4px}
+      .gear-progress{margin-bottom:8px}
+      .gp-bar{height:8px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden}
+      .gp-fill{height:100%;width:0%;border-radius:99px;background:linear-gradient(90deg,#667eea,#a78bfa);transition:width .3s}
+      .gp-txt{font-size:12px;color:var(--txt-mid,#94a3b8);margin-top:6px;line-height:1.5}
+      .gp-txt b{color:var(--txt,#e2e8f0)}
+      .gear-tools{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+      .gear-tool-btn{flex:0 0 auto;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:var(--txt,#e2e8f0);border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer}
+      .gear-tool-btn:hover{background:rgba(255,255,255,.16)}
+      .gear-saved{font-size:11px;color:var(--txt-mid,#94a3b8);margin-left:auto}
+      .gear-cat{margin-bottom:10px}
+      .gc-title{font-size:13px;font-weight:600;color:var(--txt,#e2e8f0);margin-bottom:6px}
+      .gc-n{font-weight:400;color:var(--txt-mid,#94a3b8);font-size:11px}
+      .gc-items{display:flex;flex-direction:column;gap:4px}
+      .gi{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);cursor:pointer;flex-wrap:wrap}
+      .gi:hover{background:rgba(255,255,255,.09)}
+      .gi-cb{accent-color:#667eea;width:15px;height:15px;flex:0 0 auto;cursor:pointer}
+      .gi-name{font-size:13px;font-weight:500;color:var(--txt,#e2e8f0)}
+      .gi-brand{font-size:11px;color:var(--txt-mid,#94a3b8);flex:1 1 40%;min-width:120px}
+      .gi-right{margin-left:auto;flex:0 0 auto}
+      .gi-w{font-size:11px;color:var(--txt-mid,#94a3b8);white-space:nowrap}
+      .gear-note{font-size:11px;color:var(--txt-mid,#94a3b8);line-height:1.6;margin-top:8px;padding:8px 10px;background:rgba(255,255,255,.04);border-radius:8px}
+      /* 应急现金 */
+      .emer-cash{margin-bottom:10px}
+      .ec-head{font-size:13px;font-weight:600;color:var(--txt,#e2e8f0);margin-bottom:6px}
+      .ec-big{font-size:15px;color:var(--txt,#e2e8f0);background:linear-gradient(90deg,rgba(251,191,36,.14),rgba(251,191,36,.05));border:1px solid rgba(251,191,36,.25);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+      .ec-big b{color:#fbbf24}
+      .ec-sub{font-size:11px;color:var(--txt-mid,#94a3b8);margin-left:6px}
+      .tel-link{color:#60a5fa;font-weight:600;text-decoration:underline dotted}
+      .g-note{color:#94a3b8;font-size:11px}
+      .callout.hot{background:rgba(244,63,94,.12);border-color:rgba(244,63,94,.35);color:#fecdd3}
+      /* 日出日落 chip */
+      .sun-chip{display:inline-flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--txt-mid,#94a3b8)}
+      .sun-chip .sc{border-radius:8px;padding:3px 8px;background:rgba(102,126,234,.14);border:1px solid rgba(102,126,234,.3)}
+      .sun-chip .sc.on{background:rgba(251,191,36,.16);border-color:rgba(251,191,36,.4);color:#fcd34d}
+      /* 打印路书 overlay */
+      .print-book-overlay{position:fixed;inset:0;z-index:99999;background:#eef2f7;overflow:auto;padding:16px}
+      .pb-toolbar{position:sticky;top:0;z-index:2;display:flex;gap:10px;align-items:center;background:#eef2f7;padding:8px 2px 10px;flex-wrap:wrap}
+      .pb-ttl{font-size:14px;font-weight:600;color:#334155;margin-right:auto}
+      .pb-btn{background:#2563eb;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:13px;cursor:pointer}
+      .pb-btn:hover{background:#1d4ed8}
+      .pb-doc{max-width:820px;margin:0 auto;background:#fff;color:#0f172a;padding:34px 40px;border-radius:12px;box-shadow:0 10px 30px rgba(15,23,42,.18)}
+      .pb-title{font-size:22px;margin:0 0 4px;color:#0f172a}
+      .pb-sub{font-size:13px;color:#475569;margin-bottom:14px;line-height:1.6}
+      .pb-table{width:100%;border-collapse:collapse;font-size:12px;margin:12px 0 18px}
+      .pb-table th{background:#475569;color:#fff;padding:5px 6px;text-align:left;font-weight:600}
+      .pb-table td{border:1px solid #cbd5e1;padding:5px 6px;color:#0f172a}
+      .pb-table tr:nth-child(even) td{background:#f8fafc}
+      .pb-sec{margin-bottom:14px}
+      .pb-sec-t{font-size:15px;color:#0f172a;margin:0 0 6px;border-bottom:2px solid #e2e8f0;padding-bottom:4px}
+      .pb-line{font-size:12px;color:#334155;line-height:1.9}
+      .pb-line.warn{color:#b91c1c}
+      .pb-foot{font-size:11px;color:#94a3b8;margin-top:16px;border-top:1px solid #e2e8f0;padding-top:8px}
+      @media print {
+        body > *:not(.print-book-overlay){display:none !important}
+        .print-book-overlay{position:static;background:#fff;padding:0;overflow:visible}
+        .pb-toolbar{display:none !important}
+        .pb-doc{box-shadow:none;border-radius:0;max-width:none;padding:0}
+        .pb-table{page-break-inside:auto}
+        .pb-sec,.pb-head{page-break-inside:avoid}
+      }
+    `;
+    document.head.appendChild(st);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', injectPlanXtendCSS);
+  else injectPlanXtendCSS();
 
   function renderResult(plan, weather, trackSegs, startDate) {
     const box = document.getElementById('planResult');
@@ -936,10 +1298,36 @@
       /* 拍摄机位 */
       if (P.shots && P.shots.length) {
         const sb = el('div', 'g-list');
+        // #125 机位日期推算：按 schedule 中 day 标签匹配索引 → 出发日顺推
+        const dateOf = (dayTag) => {
+          const idx = (plan.schedule || []).findIndex(d => d.day === dayTag);
+          if (idx < 0) return '';
+          const dts = new Date(startDate);
+          dts.setDate(dts.getDate() + idx);
+          // 用本地日期（勿用 toISOString——UTC+8 会偏一天）
+          return dts.getFullYear() + '-' + pad2(dts.getMonth() + 1) + '-' + pad2(dts.getDate());
+        };
         P.shots.forEach(s => {
-          sb.appendChild(el('div', 'g-item', `<span class="dot">📷</span><div><b>${s.day} ${s.camp}</b> · 拍 ${s.peak}（${s.best}）<br><span style="color:#94a3b8;font-size:12px">${s.tip}</span></div>`));
+          const item = el('div', 'g-item');
+          const ih = el('div');
+          ih.innerHTML = `<b>${s.day} ${s.camp}</b> · 拍 ${s.peak}（${s.best}）<br><span style="color:#94a3b8;font-size:12px">${s.tip}</span>`;
+          // 日出日落联动 chip（异步填充，Open-Meteo → 离线天文兜底）
+          const chips = el('div', 'sun-chip');
+          chips.appendChild(el('span', 'sc', '🌅 计算中…'));
+          ih.appendChild(chips);
+          item.appendChild(el('span', 'dot', '📷'));
+          item.appendChild(ih);
+          sb.appendChild(item);
+          const dateISO = dateOf(s.day);
+          if (dateISO && s.lat != null) {
+            fetchSunTimes(s.lat, s.lon, dateISO).then(st => {
+              chips.innerHTML = `<span class="sc on">🌅 日出 ${st.sunrise}</span><span class="sc on">🌇 日落 ${st.sunset}</span><span class="g-note" style="color:#94a3b8">${s.best} · ${st.src}</span>`;
+            }).catch(() => { chips.innerHTML = ''; });
+          } else {
+            chips.innerHTML = '';
+          }
         });
-        box.appendChild(section('📷', '拍摄机位 · 在哪个位置拍哪边的山', sb, '机位 × 每日行程 × 天气联动'));
+        box.appendChild(section('📷', '拍摄机位 · 在哪个位置拍哪边的山', sb, '机位 × 出发日期 × 日出日落联动'));
       }
 
       /* 三套方案对比 */
@@ -1039,7 +1427,15 @@
         g.proTips.forEach(tp => tips.appendChild(el('div', 'g-item', `<span class="dot">🟢</span><div>${tp}</div>`)));
         gb.appendChild(tips);
       }
-      box.appendChild(section('🎒', '装备清单', gb, '重装自备 · 深秋/垭口增补'));
+      // ★ 2026-09-14 装备勾选清单（#122）：可打包进度跟踪 + localStorage 持久化
+      const gearCk = renderGearChecklist(plan.gear, 'ydgear-' + fmtLocal(new Date(startDate)) + '-' + (plan.groupSize || 1) + '人');
+      if (gearCk.children.length) gb.appendChild(gearCk);
+      box.appendChild(section('🎒', '装备清单', gb, '重装自备 · 深秋/垭口增补 · 勾选即打包 🧗'));
+    }
+
+    /* 6.5 应急与现金（#124）：无信号 · 现金为王 · 一键呼出 */
+    if (plan.emergency || (typeof YadingEngine !== 'undefined' && YadingEngine.KB && YadingEngine.KB.emergency)) {
+      box.appendChild(section('🆘', '应急与现金', buildEmergencySection(plan), '全程无信号 · 现金为王 · 一键呼出'));
     }
 
     /* 7. 风险 */
@@ -1076,6 +1472,11 @@
       } else prompt('手动复制：', text);
     };
     box.appendChild(copyBtn);
+
+    /* 🖨️ 打印版每日路书（#123） */
+    const pbBtn = el('button', 'copy-btn', '🖨️ 打印每日路书');
+    pbBtn.onclick = () => openPrintBook(plan, weather, startDate);
+    box.appendChild(pbBtn);
 
     box.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
