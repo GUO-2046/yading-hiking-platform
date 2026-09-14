@@ -196,6 +196,87 @@
     ],
   },
 
+  /* ★★ 结构化装备清单（2026-09-14 新增：装备清单生成器）
+     cat: core 核心 / oct 10月垭口增补 / med 药品高反 / kit 炊具水具 / com 电子通讯 / food 补给杂项
+     w: 单件估算重量(克)；'-' 表示不称重（穿在身上/按人头）；brand: 建议品牌/规格（来自网上经验）
+     背包总重=核心+增补+炊具+电子+补给中【入包】项之和，不含食品/水（单独计算） */
+  gearItems: [
+    /* —— 核心装备（重装基础，入包） —— */
+    { cat: 'core', name: '重装背包', brand: '55-65L · OSPREY 苍穹/小鹰、Gregory Baltoro、Deuter Aircontact', w: 2300 },
+    { cat: 'core', name: '羽绒睡袋', brand: '-15℃ 级 800-900F 充绒', w: 1300 },
+    { cat: 'core', name: '双人三季帐篷', brand: '三季帐+地布，10 月垭口夜够用', w: 2200 },
+    { cat: 'core', name: '充气睡垫', brand: 'R 值 8 充气垫 + 铝箔地垫双垫', w: 900 },
+    { cat: 'core', name: '冲锋衣裤', brand: '硬壳，DWR 提前处理防水', w: 900 },
+    { cat: 'core', name: '羽绒服', brand: '轻量 800F 羽绒（营地保暖层）', w: 600 },
+    { cat: 'core', name: '抓绒衣裤', brand: '中层保暖，夜温 0℃ 以下', w: 800 },
+    { cat: 'core', name: '美利奴羊毛内衣', brand: '排汗速干，禁止纯棉', w: 350 },
+    { cat: 'core', name: '分体式炉头', brand: 'Soto / 火枫野火，高原抗风', w: 350 },
+    { cat: 'core', name: '高压锅', brand: '高海拔焖煮米饭，省气', w: 1000 },
+    { cat: 'core', name: '雨衣+防水袋', brand: '分体雨衣裤比雨披抗风；衣物/电子分开防水袋', w: 600 },
+    { cat: 'core', name: '净水器', brand: 'Sawyer Mini / 康迪 / MSR 重力滤水', w: 250 },
+    { cat: 'core', name: '高帮防水徒步鞋', brand: '大半码（下山顶脚趾），新鞋提前磨合两周', w: '-' },
+    /* —— 10月/垭口增补（10 月 37% 天数有降雪，垭口暗冰） —— */
+    { cat: 'oct', name: '冰爪', brand: '10 月垭口暗冰必备', w: 500 },
+    { cat: 'oct', name: '雪套', brand: '配合冰爪防雪入鞋', w: 250 },
+    { cat: 'oct', name: '登山杖', brand: '双杖，外锁碳纤维 BD Trail / 鲁滨逊', w: 550 },
+    { cat: 'oct', name: '保暖手套', brand: '防水羽绒手套', w: 200 },
+    { cat: 'oct', name: '抓绒帽', brand: '羽绒帽+抓绒帽叠戴防风', w: 100 },
+    { cat: 'oct', name: '墨镜/雪镜', brand: '雪地反射强光防雪盲', w: 150 },
+    { cat: 'oct', name: 'SPF50+ 防晒霜', brand: '高原紫外线极强', w: 80 },
+    { cat: 'oct', name: '唇膏', brand: 'SPF 唇膏防干裂', w: 30 },
+    { cat: 'oct', name: '保温杯', brand: '1L 保温杯，营地喝热水', w: 600 },
+    /* —— 药品与高反 —— */
+    { cat: 'med', name: '感冒药/退烧药', brand: '复方感冒灵 + 退烧', w: 150 },
+    { cat: 'med', name: '布洛芬', brand: '高反头痛/缓释', w: 80 },
+    { cat: 'med', name: '葡萄糖', brand: '冲剂/口服液，快速补能', w: 250 },
+    { cat: 'med', name: '血氧仪', brand: '夹指式，血氧<85% 立即下撤', w: 120 },
+    { cat: 'med', name: '红景天', brand: '提前 1 周服（心理安慰>实测）', w: 150 },
+    { cat: 'med', name: '便携氧气罐', brand: '备用救急，非长用', w: 350 },
+    /* —— 炊具与水 —— */
+    { cat: 'kit', name: '气罐 230g 高原罐', brand: '香格里拉镇/县城买；7 天约 1 大+1 小备用（10/1 防火期禁带火源）', w: 450 },
+    { cat: 'kit', name: '折叠餐具+锅铲', brand: '钛/铝轻量', w: 150 },
+    { cat: 'kit', name: '水袋/水瓶', brand: '1.5L 随身 + 营地 2L', w: 200 },
+    { cat: 'kit', name: '净水片', brand: '煮沸+过滤双保险（新果无水源）', w: 50 },
+    /* —— 电子与通讯 —— */
+    { cat: 'com', name: '充电宝', brand: '20000mAh 以上，低温掉电快', w: 450 },
+    { cat: 'com', name: '卫星通话/北斗终端', brand: '全程无信号；可租卫星电话/北斗短报文', w: 300 },
+    { cat: 'com', name: '头灯', brand: '300 流明以上 + 备用电池（BD / 奈特科尔）', w: 200 },
+    /* —— 补给与生活杂项 —— */
+    { cat: 'food', name: '路餐/能量棒', brand: '7 天约 1.5-2kg（坚果/能量棒/压缩饼干）', w: 1800 },
+    { cat: 'food', name: '个人洗漱+纸巾湿巾', brand: '速干毛巾、牙具、湿巾', w: 300 },
+    { cat: 'food', name: '垃圾袋+口哨+针线包', brand: '无痕山林，垃圾全部带出', w: 150 },
+    { cat: 'food', name: '现金与证件', brand: '现金 500-1000 元零钞（50/20/10 元）+ 身份证', w: '-' },
+  ],
+  /* 装备分类显示名 */
+  gearCatNames: {
+    core: '🧗 核心装备',
+    oct: '❄️ 10月/垭口增补',
+    med: '💊 药品与高反',
+    kit: '🍳 炊具与水具',
+    com: '🔋 电子与通讯',
+    food: '🍫 补给与杂项',
+  },
+
+  /* ★★ 应急与现金（2026-09-14 新增：应急与现金面板） */
+  emergency: {
+    phones: [
+      { k: '🏛️ 亚丁管理局', v: '0836-6966022', note: '报备咨询/政策确认（穿越合规必打）' },
+      { k: '🚐 成都专线拼车', v: '13211710192', note: '微信同号，接送机/三环内' },
+      { k: '🐴 嘎洛牛场牧民（下撤点）', v: '15756878680', note: '下撤求助，需验证' },
+      { k: '🚑 急救', v: '120', note: '山内基本无信号，依靠卫星/下行至村寨' },
+      { k: '👮 报警', v: '110', note: '山内基本无信号，就近找牧民/下撤' },
+    ],
+    cash: {
+      campFee: '营地费 30-50 元/人/晚（波拥措免费、贡嘎扎则 30、新果/蛇湖 50）',
+      gas: '气罐 230g 高原罐约 50-80 元/罐，7 天 1 大+1 小',
+      horse: '骑马 300-500 元/天（洛绒牛场—牛奶海约 300 单程）',
+      emergency: '应急备用金 200-300 元（车辆救援/临时补给）',
+      totalHint: '全程无信号无移动支付，务必备足小额现金',
+    },
+    satellite: '全程无信号：带卫星通话/北斗短报文终端（可租），下载两步路/奥维离线地图，GPS+纸质地图双备份',
+    retreat: '嘎洛牛场可作下撤点（牧民 15756878680，需验证）；出现严重高反/失温立即下撤',
+  },
+
   /* 商业队参考（可选报团） */
   teams: [
     { name: '尚野户外', contact: '稳稳 13813381134', price: '3980 元（9.30-10.6）' },
@@ -528,14 +609,16 @@
   },
 
   /* ★ 拍摄机位（个性化"在哪个位置拍哪边的山"） */
+  /* ★ 2026-09-14 新增 lat/lon 近似坐标（WGS84，轨迹海拔聚类+公开资料推导，±3km 内日出日落误差 <2 分钟）
+     —— 供「营地日出日落联动」用 Open-Meteo daily=sunrise,sunset 动态计算 */
   shots: [
-    { camp: '波拥措', peak: '三神山同框+倒影', best: '清晨/傍晚', tip: '波拥措是唯一三神山同框倒影点，日出日照金山倒映湖面，带 24mm 广角+偏振镜' },
-    { camp: '贡嘎扎则', peak: '夏诺多吉', best: '清晨（东南面金山）/ 夜间星空', tip: '夏诺多吉脚下五星营地，银河季 10 月仍可见，三脚架+长曝光拍星轨' },
-    { camp: '万花池', peak: '夏诺多吉', best: '清晨', tip: '雪山横切段起点，晨光打在夏诺多吉东坡' },
-    { camp: '新果牛场', peak: '央迈勇东壁', best: '下午', tip: '实测风景最佳，无水源；下午斜光拍央迈勇东壁层次感最强' },
-    { camp: '蛇湖', peak: '央迈勇+仙乃日西侧', best: '清晨（蛇湖晨雾）', tip: '蛇湖西侧是拍央迈勇倒影最佳机位，清晨雾气+湖面倒影双景' },
-    { camp: '嘎洛牛场', peak: '措该达垭口视角', best: '垭口前后', tip: '措该达垭口(5036m)回望三神山，可作下撤点' },
-    { camp: '卡斯牛棚', peak: '松洛垭口/珍珠海方向', best: '出山清晨', tip: '8 天版经珍珠海出山，湖面倒影仙乃日' },
+    { camp: '波拥措', lat: 28.429, lon: 100.414, peak: '三神山同框+倒影', best: '清晨/傍晚', tip: '波拥措是唯一三神山同框倒影点，日出日照金山倒映湖面，带 24mm 广角+偏振镜' },
+    { camp: '贡嘎扎则', lat: 28.424, lon: 100.373, peak: '夏诺多吉', best: '清晨（东南面金山）/ 夜间星空', tip: '夏诺多吉脚下五星营地，银河季 10 月仍可见，三脚架+长曝光拍星轨' },
+    { camp: '万花池', lat: 28.372, lon: 100.395, peak: '夏诺多吉', best: '清晨', tip: '雪山横切段起点，晨光打在夏诺多吉东坡' },
+    { camp: '新果牛场', lat: 28.369, lon: 100.396, peak: '央迈勇东壁', best: '下午', tip: '实测风景最佳，无水源；下午斜光拍央迈勇东壁层次感最强' },
+    { camp: '蛇湖', lat: 28.362, lon: 100.368, peak: '央迈勇+仙乃日西侧', best: '清晨（蛇湖晨雾）', tip: '蛇湖西侧是拍央迈勇倒影最佳机位，清晨雾气+湖面倒影双景' },
+    { camp: '嘎洛牛场', lat: 28.418, lon: 100.393, peak: '措该达垭口视角', best: '垭口前后', tip: '措该达垭口(5036m)回望三神山，可作下撤点' },
+    { camp: '卡斯牛棚', lat: 28.372, lon: 100.389, peak: '松洛垭口/珍珠海方向', best: '出山清晨', tip: '8 天版经珍珠海出山，湖面倒影仙乃日' },
   ],
 };
 
@@ -1089,9 +1172,11 @@ function shotAdvice(sched, input) {
   const out = [];
   sched.forEach((d, i) => {
     const camp = (d.camp || '').replace(/^\d+m\s*/, ''); // 去掉海拔前缀取营地名
-    const hit = shots.find(s => camp.includes(s.camp) || s.camp.includes(camp));
+    // 归一化「波用措/波佣措」→「波拥措」（行程表与机位表用字不同）
+    const ncamp = camp.includes('波用') || camp.includes('波佣') ? '波拥措' : camp;
+    const hit = shots.find(s => ncamp.includes(s.camp) || s.camp.includes(ncamp));
     if (hit && !out.some(o => o.camp === hit.camp)) {
-      out.push({ day: d.day || 'D' + (i + 1), camp: hit.camp, peak: hit.peak, best: hit.best, tip: hit.tip });
+      out.push({ day: d.day || 'D' + (i + 1), camp: hit.camp, peak: hit.peak, best: hit.best, tip: hit.tip, lat: hit.lat, lon: hit.lon });
     }
   });
   // 摄影特需优先输出
@@ -1231,6 +1316,14 @@ function buildPlan(input) {
   const oct = Number(input.month) === 10;
   const octGear = oct ? KB.gear.octAdd : ['冰爪', '雪套']; // 非10月也至少提示冰爪雪套
 
+  /* ★ 结构化装备清单（装备清单生成器）：按重装/轻装过滤
+     light：剔除帐篷/睡袋/高压锅/炊具组，保留核心+增补+药品+电子+补给 */
+  let gearItems = (KB.gearItems || []).map(g => ({ ...g }));
+  if (input.load === 'light') {
+    const dropSet = new Set(['双人三季帐篷', '高压锅', '气罐 230g 高原罐', '折叠餐具+锅铲']);
+    gearItems = gearItems.filter(g => !dropSet.has(g.name));
+  }
+
   // ★ 个性化扩展：经验/健康/预算/机位/三套方案
   const expAdv = experienceAdvice(input.experience);
   const health = healthAdvice(input.health || {});
@@ -1258,6 +1351,7 @@ function buildPlan(input) {
       weather: weather.summary,
       weatherAlert: weather.alert,
     },
+    groupSize: Number(input.groupSize) || 1,
     schedule: sched.days,
     scheduleNotes: notes,
     camps: KB.camps,
@@ -1265,12 +1359,16 @@ function buildPlan(input) {
     transport,
     groupAdvice,
     hotels: KB.hotels,
+    emergency: KB.emergency,
     gear: {
       core: gearList,
       octAdd: octGear,
       medicine: KB.gear.medicine,
       stove: KB.gear.stove,
       proTips: KB.gear.proTips || [],
+      /* ★ 结构化清单（装备清单生成器） */
+      items: gearItems,
+      catNames: KB.gearCatNames,
     },
     risks: KB.risks,
     safety: KB.safety,
