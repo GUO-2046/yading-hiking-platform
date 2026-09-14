@@ -2055,18 +2055,25 @@
                 if (lines.length) {
                     addRouteLayers(routeId, { features: [feature] }, color, idx);
                     // 飞入动画（仅首要素触发，避免多段重复抢视角）
+                    // 守卫：起点坐标须有效（个别 KML/GPX 要素坐标解析异常时为 NaN，跳过飞入）
                     if (idx === 0) {
-                        map.flyTo({
-                            center: lines[0].coordinates[0],
-                            zoom: 13,
-                            pitch: 45,
-                            duration: 2000
-                        });
+                        const firstPt = lines[0].coordinates[0];
+                        if (Array.isArray(firstPt) && firstPt.length >= 2 && !isNaN(firstPt[0]) && !isNaN(firstPt[1])) {
+                            map.flyTo({
+                                center: firstPt,
+                                zoom: 13,
+                                pitch: 45,
+                                duration: 2000
+                            });
+                        }
                     }
                 }
                 // 收集本要素内所有点（含 GeometryCollection 子点）
                 if (g && g.type === 'Point') points.push(g);
                 points.forEach(pt => {
+                    // 坐标有效性守卫：个别 KML/GPX 要素坐标解析为 NaN/空时跳过，避免 Invalid LatLng 报错
+                    const ptC = pt && pt.coordinates;
+                    if (!Array.isArray(ptC) || ptC.length < 2 || isNaN(ptC[0]) || isNaN(ptC[1])) return;
                     const name = feature.properties?.name || feature.properties?.name_en || '标注点';
                     // description 可能被 togeojson 解析成对象 {value: ...}
                     const descRaw = feature.properties?.description || feature.properties?.desc || '';
