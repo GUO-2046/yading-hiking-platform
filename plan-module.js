@@ -620,13 +620,34 @@
     return e;
   }
 
-  function section(icon, title, bodyNode, sub) {
-    const sec = el('div');
-    const t = el('div', 'r-title');
-    t.innerHTML = `<span class="ico">${icon}</span>${title}`;
-    sec.appendChild(t);
-    if (sub) sec.appendChild(el('div', 'r-sub', sub));
-    sec.appendChild(bodyNode);
+  /* ========== V3 攻略分层：折叠卡片 ========== */
+  /* 核心分区默认展开（其余折叠），标题含任一关键词即开 */
+  const SEC_OPEN_DEFAULT = ['每日行程', '难度', '预算', '装备清单', '风险与应对'];
+
+  function section(icon, title, bodyNode, sub, opts) {
+    opts = opts || {};
+    const sec = el('div', 'psec');
+
+    const head = el('div', 'psec-head');
+    head.innerHTML = `<span class="ico">${icon}</span><span class="psec-title-wrap"><span class="psec-t">${title}</span></span>`;
+    if (sub) head.querySelector('.psec-title-wrap').appendChild(el('div', 'psec-sub', sub));
+    if (opts.badge) head.appendChild(el('span', 'psec-badge', opts.badge));
+    head.appendChild(el('span', 'psec-arrow', '▾'));
+    sec.appendChild(head);
+
+    const body = el('div', 'psec-body');
+    body.appendChild(bodyNode);
+    sec.appendChild(body);
+
+    const openNow = opts.open !== undefined ? opts.open : SEC_OPEN_DEFAULT.some(k => title.includes(k));
+    sec.classList.toggle('open', openNow);
+    head.classList.toggle('on', openNow);
+
+    head.onclick = () => {
+      const isOpen = sec.classList.contains('open');
+      sec.classList.toggle('open', !isOpen);
+      head.classList.toggle('on', !isOpen);
+    };
     return sec;
   }
 
@@ -1012,7 +1033,21 @@
     [sum.distance || meta.distance, sum.days, meta.elevation, meta.bestWindow, meta.difficulty]
       .filter(Boolean).forEach(t => kv.appendChild(el('span', '', t)));
     sumCard.appendChild(kv);
-    if (sum.weather) sumCard.appendChild(el('div', 'weather-box', '🌤️ ' + sum.weather.replace(/\n/g, '<br>')));
+    if (sum.weather) {
+      const wb = el('div', 'weather-box');
+      wb.innerHTML = '🌤️ <span class="wx-txt">' + sum.weather.replace(/\n/g, '<br>') + '</span>';
+      // 长天气文本默认折叠为 2 行，点击展开
+      if (sum.weather.length > 70) {
+        wb.classList.add('fold');
+        const more = el('button', 'wx-more', '展开天气详情 ▾');
+        more.onclick = () => {
+          const folded = wb.classList.toggle('fold');
+          more.textContent = folded ? '展开天气详情 ▾' : '收起 ▴';
+        };
+        wb.appendChild(more);
+      }
+      sumCard.appendChild(wb);
+    }
     if (sum.weatherAlert) sumCard.appendChild(el('div', 'alert-box', '⚠️ ' + sum.weatherAlert));
     box.appendChild(sumCard);
 
@@ -1125,14 +1160,14 @@
         schedBody.appendChild(item);
       });
       (plan.scheduleNotes || []).forEach(n => schedBody.appendChild(el('div', 'g-item gold', `<span class="dot">📌</span><div>${n}</div>`)));
-      box.appendChild(section('🗓️', '每日行程安排 · 交通+徒步+天气', schedBody));
+      box.appendChild(section('🗓️', '每日行程安排 · 交通+徒步+天气', schedBody, '核心：里程/爬升/营地/垭口/逐日天气', { badge: plan.schedule.length + ' 天' }));
     }
 
     /* 3. 交通 */
     if (plan.transport) {
       const t = plan.transport;
-      const tb = el('div', 'g-list');
-      const add = (k, v) => { if (v) tb.appendChild(el('div', 'g-item', `<span class="dot">•</span><div>${k}：${v}</div>`)); };
+      const tb = el('div', 'g-grid');
+      const add = (k, v) => { if (v) tb.appendChild(el('div', 'g-cell', `<div class="gc-k">${k}</div><div class="gc-v">${v}</div>`)); };
       add('🚄 到达', t.train);
       add('🚐 专线拼车', (t.van?.contact || '') + ' ' + (t.van?.desc || ''));
       if (t.van?.price) add('💰 参考价', t.van.price);
@@ -1222,7 +1257,7 @@
         rCard.appendChild(el('div', 'sc-sum' + (R.score >= 60 ? ' warn' : ''), '🛡️ ' + R.advice));
         scoreBox.appendChild(rCard);
 
-        box.appendChild(section('🎯', '难度 × 风险评估', scoreBox, '基于路线特征 × 你的画像 × 月份气候自动计算'));
+        box.appendChild(section('🎯', '难度 × 风险评估', scoreBox, '基于路线特征 × 你的画像 × 月份气候自动计算', { badge: `${D.score} / ${R.score}` }));
       }
 
       /* 个性化理由（"因为你是X，所以Y"） */
@@ -1292,7 +1327,7 @@
           }
           bb.appendChild(recBox);
         }
-        box.appendChild(section('💰', '预算评估（帮你算清楚花多少）', bb, b.hasBudget ? '基于你的预算 ' + b.budget + ' 元' : '未填预算按默认档估算'));
+        box.appendChild(section('💰', '预算评估（帮你算清楚花多少）', bb, b.hasBudget ? '基于你的预算 ' + b.budget + ' 元' : '未填预算按默认档估算', { badge: b.total + ' 元' }));
       }
 
       /* 拍摄机位 */
@@ -1327,7 +1362,7 @@
             chips.innerHTML = '';
           }
         });
-        box.appendChild(section('📷', '拍摄机位 · 在哪个位置拍哪边的山', sb, '机位 × 出发日期 × 日出日落联动'));
+        box.appendChild(section('📷', '拍摄机位 · 在哪个位置拍哪边的山', sb, '机位 × 出发日期 × 日出日落联动', { badge: P.shots.length + ' 处' }));
       }
 
       /* 三套方案对比 */
@@ -1344,15 +1379,15 @@
         });
         vb.appendChild(row);
         vb.appendChild(el('div', 'r-sub', '💡 同一画像生成 3 套方案，保守/标准/激进在里程、天数、适应日上错开，可按需切换'));
-        box.appendChild(section('🎛️', '三套方案任你选', vb, '对比后挑最适合你的节奏'));
+        box.appendChild(section('🎛️', '三套方案任你选', vb, '对比后挑最适合你的节奏', { badge: P.variants.length + ' 套' }));
       }
     }
 
     /* 4. 门票 */
     if (plan.ticket) {
       const tk = plan.ticket;
-      const tb = el('div', 'g-list');
-      const add = (k, v) => tb.appendChild(el('div', 'g-item', `<span class="dot">•</span><div><b>${k}</b>：${v}</div>`));
+      const tb = el('div', 'g-grid');   // key-value 紧凑网格
+      const add = (k, v) => tb.appendChild(el('div', 'g-cell', `<div class="gc-k">${k}</div><div class="gc-v">${v}</div>`));
       add('🎫 免票政策', tk.freePeriod);
       add('🕖 放票时间', tk.releaseTime);
       add('📅 预约窗口', tk.window);
@@ -1363,7 +1398,7 @@
       add('🚫 禁带', tk.banned);
       add('↩️ 退改规则', tk.refund);
       if (tk.shuttleFree) add('🚌 观光车', tk.shuttleFree);
-      box.appendChild(section('🎫', '门票与预约', tb, '重要！提前 15 天抢'));
+      box.appendChild(section('🎫', '门票与预约', tb, '重要！提前 15 天抢', { badge: '免票' }));
     }
 
     /* 5. 住宿 */
@@ -1430,7 +1465,7 @@
       // ★ 2026-09-14 装备勾选清单（#122）：可打包进度跟踪 + localStorage 持久化
       const gearCk = renderGearChecklist(plan.gear, 'ydgear-' + fmtLocal(new Date(startDate)) + '-' + (plan.groupSize || 1) + '人');
       if (gearCk.children.length) gb.appendChild(gearCk);
-      box.appendChild(section('🎒', '装备清单', gb, '重装自备 · 深秋/垭口增补 · 勾选即打包 🧗'));
+      box.appendChild(section('🎒', '装备清单', gb, '重装自备 · 深秋/垭口增补 · 勾选即打包 🧗', { badge: (g.items || []).length + ' 件' }));
     }
 
     /* 6.5 应急与现金（#124）：无信号 · 现金为王 · 一键呼出 */
